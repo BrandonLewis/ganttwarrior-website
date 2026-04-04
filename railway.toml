@@ -1,0 +1,5 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "cd website && python manage.py collectstatic --noinput && gunicorn config.wsgi --bind 0.0.0.0:$PORT"
