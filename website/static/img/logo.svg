@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Sword grip -->
+  <rect x="20" y="88" width="30" height="24" rx="3" fill="#C8AA5A"/>
+  <!-- Crossguard -->
+  <rect x="50" y="72" width="8" height="56" rx="2" fill="#C8AA5A"/>
+  <!-- Blade / Gantt bar 1 -->
+  <rect x="58" y="85" width="130" height="18" rx="2" fill="#C8AA5A"/>
+  <polygon points="188,85 188,103 196,94" fill="#C8AA5A"/>
+  <!-- Gantt bar 2 (shorter, offset below) -->
+  <rect x="58" y="115" width="80" height="14" rx="2" fill="#C8AA5A" opacity="0.6"/>
+</svg>
