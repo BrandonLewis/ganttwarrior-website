@@ -52,3 +52,29 @@ class MarkdownLoaderTests(SimpleTestCase):
         )
         result = load_markdown_file(md_file)
         self.assertIn("print", result["html"])
+
+
+class DocsViewTests(SimpleTestCase):
+    def setUp(self):
+        from docs import views as docs_views
+        docs_views._cache = None
+
+    def test_docs_index_redirects_to_getting_started(self):
+        response = self.client.get("/docs/")
+        self.assertRedirects(response, "/docs/getting-started/", fetch_redirect_response=False)
+
+    def test_docs_page_status_200(self):
+        response = self.client.get("/docs/getting-started/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_docs_page_contains_sidebar(self):
+        response = self.client.get("/docs/getting-started/")
+        self.assertContains(response, "SCROLLS")
+
+    def test_docs_page_renders_markdown_content(self):
+        response = self.client.get("/docs/getting-started/")
+        self.assertContains(response, "Getting Started")
+
+    def test_docs_page_404_for_missing_slug(self):
+        response = self.client.get("/docs/nonexistent-page/")
+        self.assertEqual(response.status_code, 404)

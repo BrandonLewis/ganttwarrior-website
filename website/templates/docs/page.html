@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}{{ doc.meta.title }} — Docs{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="docs-layout">
+        <aside class="docs-sidebar">
+            <p class="docs-sidebar-title">SCROLLS</p>
+            {% for item in sidebar %}
+                {% if item.type == "heading" %}
+                    <p class="docs-sidebar-title">{{ item.title|upper }}</p>
+                {% else %}
+                    <a href="{% url 'docs:page' slug=item.slug %}" {% if item.active %}class="active"{% endif %}>{{ item.title }}</a>
+                {% endif %}
+            {% endfor %}
+        </aside>
+        <main class="docs-content markdown-body">
+            {{ doc.html|safe }}
+        </main>
+    </div>
+</div>
+{% endblock %}
