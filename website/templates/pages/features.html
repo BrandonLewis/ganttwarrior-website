@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Features{% endblock %}
+
+{% block content %}
+<div class="container page-content">
+    <p class="section-divider">░░▒▒▓▓██ ARSENAL ██▓▓▒▒░░</p>
+
+    <div class="features-grid">
+        <div class="feature-card">
+            <h3>⚔ Gantt Chart Editor</h3>
+            <p>Cell-grid editor with cursor navigation, multi-select, fill, erase, split, merge. Dependency arrows render automatically. Full clipboard with copy, cut, paste. Unlimited undo/redo.</p>
+            <div class="feature-tags">
+                <span class="feature-tag">WBS numbering</span>
+                <span class="feature-tag">Critical path</span>
+                <span class="feature-tag">Work calendar</span>
+            </div>
+        </div>
+        <div class="feature-card">
+            <h3>🛡 Kanban Board</h3>
+            <p>Columns for each task status. Move cards with keyboard shortcuts. Inline editing. Syncs with Gantt view in real time through a shared undo stack.</p>
+            <div class="feature-tags">
+                <span class="feature-tag">Keyboard nav</span>
+                <span class="feature-tag">Status columns</span>
+            </div>
+        </div>
+        <div class="feature-card">
+            <h3>📅 Calendar View</h3>
+            <p>Month, week, day, and agenda views. Fill time blocks, resize, split, merge. Import/export iCalendar files. Timezone-aware.</p>
+            <div class="feature-tags">
+                <span class="feature-tag">iCal sync</span>
+                <span class="feature-tag">Time blocks</span>
+            </div>
+        </div>
+        <div class="feature-card">
+            <h3>🗡 Critical Path Method</h3>
+            <p>Forward and backward pass scheduling. Identifies slack time and critical tasks. Respects dependency chains across your entire project.</p>
+            <div class="feature-tags">
+                <span class="feature-tag">CPM scheduler</span>
+                <span class="feature-tag">Dependencies</span>
+            </div>
+        </div>
+        <div class="feature-card">
+            <h3>📜 Export</h3>
+            <p>Export your project as PDF, Excel spreadsheet, or formatted terminal output. Share schedules with stakeholders in any format.</p>
+            <div class="feature-tags">
+                <span class="feature-tag">PDF</span>
+                <span class="feature-tag">Excel</span>
+                <span class="feature-tag">Terminal</span>
+            </div>
+        </div>
+        <div class="feature-card">
+            <h3>⚙ CLI Commands</h3>
+            <p>Full CLI for scripting and automation. Add tasks, set dependencies, schedule, and export — all from the command line.</p>
+            <div class="feature-tags">
+                <span class="feature-tag">Scriptable</span>
+                <span class="feature-tag">MCP-ready</span>
+            </div>
+        </div>
+        <div class="feature-card">
+            <h3>📆 iCal Sync</h3>
+            <p>Import and export iCalendar (.ics) files. Time-aware events are preserved as time blocks with task merging on import.</p>
+            <div class="feature-tags">
+                <span class="feature-tag">Import</span>
+                <span class="feature-tag">Export</span>
+            </div>
+        </div>
+        <div class="feature-card">
+            <h3>🗓 Work Calendars</h3>
+            <p>Define working days per project or per task. Weekends, holidays, and custom schedules are respected by the scheduler.</p>
+            <div class="feature-tags">
+                <span class="feature-tag">Per-task</span>
+                <span class="feature-tag">Per-project</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

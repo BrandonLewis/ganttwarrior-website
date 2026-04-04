@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}GanttWarrior{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <pre class="hero-ascii">
+<span style="color:#50463C">         .  *  .     .     *    .   .
+  *         .     .    *       .     *
+     .          *      .   .       .
+</span><span style="color:#3C503C">     _\|/_
+    /     \             ()
+   / ^   ^ \          ( .. )
+    /_____/
+</span><span style="color:#8C7850">               ,  _
+              /| / |
+</span><span style="color:#B4964A">         .---` |/  `---,
+         |  </span><span style="color:#DCC878;font-weight:bold">o</span><span style="color:#B4964A">       </span><span style="color:#DCC878;font-weight:bold">o</span><span style="color:#B4964A">  |
+         |    \___/    |
+         |   _/   \_   |
+</span><span style="color:#A0825A">         `--/   ^   \--`
+</span><span style="color:#786446">            |  .|.  |
+       ,----| / | \ |----,
+</span><span style="color:#8C6E46">      /  .  |/  |  \|  .  \
+     /      /   |   \      \
+</span><span style="color:#645A3C">     \  ====|   |   |====  /
+      \     |   |   |     /
+</span><span style="color:#50463C">       \    |   |   |    /
+        |   |   |   |   |
+        |  /    |    \  |
+</span><span style="color:#3C3728">       _| /     |     \ |_
+      |__/      |      \__|
+</span><span style="color:#322D23">    __/  /      |       \  \__
+   /____/       |        \____\
+</span><span style="color:#282319"> __`--`  ~~~~~~~~ ~ ~~~~~~~~  `--`___
+</span><span style="color:#231E14">~~~~~~~~~~~~~~~~~~~~~~~~~~~  ~~~~~~~~~
+</span>
+    </pre>
+
+    <div class="hero-title-box">
+        <p class="hero-title">T H E  G A N T T  W A R R I O R</p>
+        <p class="hero-subtitle">Task Scheduler &amp; Gantt Chart for the CLI</p>
+    </div>
+
+    <div class="cta-group">
+        <span class="btn-primary">pip install ganttwarrior</span>
+        <a href="https://github.com/BrandonLewis/ganttwarrior" class="btn-secondary" target="_blank" rel="noopener">View on GitHub →</a>
+    </div>
+</section>
+
+<div class="container">
+    <p class="section-divider">░░▒▒▓▓██ FEATURES ██▓▓▒▒░░</p>
+    <div class="features-grid">
+        <div class="feature-card">
+            <h3>⚔ Gantt Charts</h3>
+            <p>Cell-grid editor with cursor, selection, and dependency arrows. Full clipboard with copy, cut, paste.</p>
+        </div>
+        <div class="feature-card">
+            <h3>🛡 Kanban Board</h3>
+            <p>Drag cards across status columns with full keyboard navigation. Syncs with Gantt in real time.</p>
+        </div>
+        <div class="feature-card">
+            <h3>🗡 Critical Path</h3>
+            <p>CPM scheduler finds your project's critical path automatically with forward and backward passes.</p>
+        </div>
+    </div>
+
+    <p class="section-divider">░░▒▒▓▓██ SEE IT IN ACTION ██▓▓▒▒░░</p>
+    <div class="terminal">
+        <code>$ ganttwarrior demo</code>
+    </div>
+</div>
+{% endblock %}
