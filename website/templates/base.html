@@ -1,0 +1,32 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}GanttWarrior{% endblock %} — The Gantt Warrior</title>
+    <meta name="description" content="{% block description %}TUI Gantt chart and task scheduler with critical path, WBS, Kanban, and export support.{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}GanttWarrior{% endblock %}">
+    <meta property="og:description" content="TUI Gantt chart and task scheduler for the CLI.">
+    <meta property="og:type" content="website">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <nav class="nav">
+        <a href="/" class="nav-brand">⚔ GanttWarrior</a>
+        <div class="nav-links">
+            <a href="{% url 'pages:features' %}" {% if request.resolver_match.url_name == 'features' %}class="active"{% endif %}>Features</a>
+            <a href="{% url 'docs:index' %}" {% if request.resolver_match.app_name == 'docs' %}class="active"{% endif %}>Docs</a>
+            <a href="{% url 'blog:index' %}" {% if request.resolver_match.app_name == 'blog' %}class="active"{% endif %}>Blog</a>
+            <a href="https://github.com/BrandonLewis/ganttwarrior" target="_blank" rel="noopener">GitHub</a>
+        </div>
+    </nav>
+
+    {% block content %}{% endblock %}
+
+    <footer class="footer">
+        <p>MIT License · Made with ⚔ by Brandon Lewis</p>
+        <p class="decorative-bar">░░▒▒▓▓██████████████████████▓▓▒▒░░</p>
+    </footer>
+</body>
+</html>
