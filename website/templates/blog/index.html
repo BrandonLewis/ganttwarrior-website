@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Blog{% endblock %}
+
+{% block content %}
+<div class="container page-content">
+    <p class="section-divider">░░▒▒▓▓██ CHRONICLES ██▓▓▒▒░░</p>
+
+    {% for post in posts %}
+    <div class="blog-post-card">
+        <h3><a href="{% url 'blog:detail' slug=post.slug %}">{{ post.meta.title }}</a></h3>
+        <p class="blog-meta">{{ post.meta.date }}{% if post.meta.author %} · {{ post.meta.author }}{% endif %}</p>
+        {% if post.meta.excerpt %}
+        <p class="blog-excerpt">{{ post.meta.excerpt }}</p>
+        {% endif %}
+    </div>
+    {% empty %}
+    <p>No posts yet.</p>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,8 +1,10 @@
 from django.urls import path
-from django.http import HttpResponse
+
+from . import views
 
 app_name = "blog"
 
 urlpatterns = [
-    path("", lambda r: HttpResponse(""), name="index"),
+    path("", views.index, name="index"),
+    path("<slug:slug>/", views.detail, name="detail"),
 ]

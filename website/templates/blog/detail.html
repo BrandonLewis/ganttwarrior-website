@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}{{ post.meta.title }} — Blog{% endblock %}
+
+{% block content %}
+<div class="container page-content">
+    <article class="markdown-body" style="max-width: 800px;">
+        <p class="blog-meta">{{ post.meta.date }}{% if post.meta.author %} · {{ post.meta.author }}{% endif %}</p>
+        {{ post.html|safe }}
+    </article>
+</div>
+{% endblock %}
