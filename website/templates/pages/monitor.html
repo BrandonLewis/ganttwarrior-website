@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EL-USB-TC · WebUSB Spike</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0c0d10;
+    --bg-elev:   #14161b;
+    --panel:     #1a1d23;
+    --panel-2:   #20242b;
+    --border:    #2a2e37;
+    --rule:      #353a45;
+    --fg:        #d8dae0;
+    --fg-2:      #9ba0aa;
+    --fg-3:      #6a7080;
+    --fg-4:      #464b57;
+    --amber:     #ffb454;
+    --amber-2:   #b87a30;
+    --teal:      #5cd6c4;
+    --teal-2:    #3a9387;
+    --red:       #ff7a7a;
+    --green:     #7fd181;
+    --mono:      'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--fg); }
+  body {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-image:
+      linear-gradient(rgba(255,180,84,0.012) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,180,84,0.012) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  main {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 24px 60px;
+  }
+
+  /* ── header ────────────────────────────────────────────── */
+  header.head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: end;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .brand .eyebrow {
+    font-size: 11px;
+    color: var(--fg-3);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .brand h1 {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 26px;
+    margin: 0;
+    letter-spacing: -0.02em;
+    color: var(--fg);
+  }
+  .brand h1 .accent { color: var(--amber); }
+  .brand .sub {
+    color: var(--fg-2);
+    font-size: 12px;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    background: var(--bg-elev);
+    font-size: 12px;
+    color: var(--fg-2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--fg-4);
+    box-shadow: 0 0 0 0 transparent;
+    transition: all 0.2s;
+  }
+  .status-dot.status-on {
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+  }
+  .status-dot.status-busy {
+    background: var(--amber);
+    box-shadow: 0 0 8px var(--amber);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  .status-dot.status-err {
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%     { opacity: 0.45; }
+  }
+
+  /* ── warning banner ────────────────────────────────────── */
+  .banner {
+    border: 1px solid var(--red);
+    background: rgba(255,122,122,0.08);
+    color: var(--red);
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 12px;
+  }
+  .banner.banner-info {
+    border-color: var(--amber-2);
+    background: rgba(255,180,84,0.06);
+    color: var(--amber);
+  }
+
+  /* ── panels ────────────────────────────────────────────── */
+  .panel {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    margin-bottom: 18px;
+  }
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-2);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-2);
+  }
+  .panel-head .meta {
+    color: var(--fg-3);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: none;
+  }
+  .panel-body { padding: 16px; }
+  .panel-body.tight { padding: 0; }
+
+  /* ── buttons ───────────────────────────────────────────── */
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  button {
+    font-family: var(--mono);
+    font-weight: 500;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: var(--panel-2);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  button:hover:not(:disabled) {
+    border-color: var(--amber-2);
+    color: var(--amber);
+    background: var(--panel);
+  }
+  button:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  button.primary {
+    border-color: var(--amber-2);
+    color: var(--amber);
+  }
+  button.primary:hover:not(:disabled) {
+    background: rgba(255,180,84,0.08);
+  }
+  button.ghost {
+    border-color: var(--rule);
+    color: var(--fg-2);
+  }
+
+  /* ── data displays ─────────────────────────────────────── */
+  .kv {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 0;
+    font-size: 12px;
+  }
+  .kv > .k {
+    color: var(--fg-3);
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 11px;
+  }
+  .kv > .v {
+    color: var(--fg);
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--border);
+    word-break: break-all;
+  }
+  .kv > .v .accent { color: var(--teal); }
+  .kv > .v .dim { color: var(--fg-3); }
+  .kv > .v .raw { color: var(--fg-3); font-size: 11px; }
+
+  pre.hex {
+    margin: 0;
+    padding: 14px 18px;
+    color: var(--fg-2);
+    font-size: 12px;
+    line-height: 1.6;
+    background: var(--bg-elev);
+    overflow-x: auto;
+    max-height: 360px;
+  }
+  pre.hex .ofs { color: var(--fg-4); }
+  pre.hex .asc { color: var(--teal-2); }
+
+  table.samples {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.samples thead th {
+    text-align: left;
+    color: var(--fg-3);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 11px;
+    padding: 10px 16px;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+  }
+  table.samples tbody td {
+    padding: 6px 16px;
+    border-bottom: 1px solid rgba(58,63,74,0.4);
+    color: var(--fg);
+  }
+  table.samples tbody tr:hover td { background: rgba(255,180,84,0.04); }
+  table.samples td.num { color: var(--teal); text-align: right; font-variant-numeric: tabular-nums; }
+  table.samples td.idx { color: var(--fg-3); text-align: right; }
+
+  /* ── decoder selector ──────────────────────────────────── */
+  .decoder-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-2);
+    font-size: 12px;
+  }
+  .decoder-row label {
+    color: var(--fg-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 11px;
+  }
+  select {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--panel);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  select:focus { outline: 1px solid var(--amber-2); }
+
+  /* ── log ───────────────────────────────────────────────── */
+  .log {
+    background: #07080a;
+    color: var(--fg-2);
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 14px 16px;
+    height: 280px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
+  .log-line { white-space: pre-wrap; word-break: break-all; }
+  .log-info { color: var(--fg-2); }
+  .log-ok   { color: var(--green); }
+  .log-warn { color: var(--amber); }
+  .log-error{ color: var(--red); }
+  .log-cmd  { color: var(--teal); border-top: 1px dashed var(--rule); margin-top: 4px; padding-top: 4px; }
+
+  /* ── footer note ───────────────────────────────────────── */
+  footer.note {
+    font-size: 11px;
+    color: var(--fg-3);
+    line-height: 1.7;
+    padding: 16px;
+    border: 1px dashed var(--border);
+    margin-top: 22px;
+  }
+  footer.note code {
+    color: var(--amber);
+    font-family: var(--mono);
+  }
+  footer.note a { color: var(--teal); }
+
+  /* responsive */
+  @media (max-width: 640px) {
+    .kv { grid-template-columns: 1fr; }
+    .kv > .k { border-bottom: none; padding-bottom: 0; }
+    .kv > .v { padding-top: 2px; }
+    header.head { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <header class="head">
+    <div class="brand">
+      <div class="eyebrow">Anvil Rock Road · WebUSB Spike</div>
+      <h1>EL<span class="accent">·</span>USB<span class="accent">·</span>TC <span class="accent">//</span> downloader</h1>
+      <div class="sub">Lascar EasyLog thermocouple logger · raw USB protocol per <span style="color:var(--teal)">sigrok.org/wiki/Lascar_Electronics_EL-USB_protocol</span></div>
+    </div>
+    <div class="status" id="status">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">disconnected</span>
+    </div>
+  </header>
+
+  <div class="banner" id="webusb-warning" hidden>
+    WebUSB API is not available in this browser. Use Chrome, Edge, or Opera. The page must be loaded over HTTPS or from localhost.
+  </div>
+
+  <!-- ── DEVICE ────────────────────────────────────────── -->
+  <section class="panel">
+    <div class="panel-head">
+      <span>device</span>
+      <span class="meta" id="device-info">no device</span>
+    </div>
+    <div class="panel-body">
+      <div class="kv" style="margin-bottom:14px">
+        <div class="k">vendor id</div><div class="v"><span class="accent">0x10C4</span> · Silicon Labs (Cygnal)</div>
+        <div class="k">product id</div><div class="v"><span class="accent">0x0002</span> · F32x USBXpress</div>
+        <div class="k">interface class</div><div class="v">vendor-specific (not HID, not CDC)</div>
+        <div class="k">endpoints</div><div class="v">EP <span class="accent">0x02</span> OUT bulk · EP <span class="accent">0x82</span> IN bulk · 64 B max</div>
+      </div>
+      <div class="actions">
+        <button id="btn-connect" class="primary">Connect</button>
+        <button id="btn-disconnect" class="ghost">Disconnect</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ACTIONS ────────────────────────────────────────── -->
+  <section class="panel">
+    <div class="panel-head"><span>protocol</span><span class="meta">three commands per the sigrok wiki</span></div>
+    <div class="panel-body">
+      <div class="actions">
+        <button id="btn-load-config">Load Config &nbsp;<span style="color:var(--fg-3);font-weight:400">[00 FF FF]</span></button>
+        <button id="btn-download">Download Samples &nbsp;<span style="color:var(--fg-3);font-weight:400">[03 FF FF]</span></button>
+        <button id="btn-export" class="ghost">Export CSV</button>
+        <button id="btn-clear-log" class="ghost">Clear Log</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CONFIG ────────────────────────────────────────── -->
+  <section class="panel">
+    <div class="panel-head"><span>device configuration</span><span class="meta" id="cfg-meta">load config to populate</span></div>
+    <div class="panel-body">
+      <div class="kv" id="config-kv">
+        <div class="k">device type</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">device name</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">serial number</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">firmware</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">unit</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">sample interval</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">sample count</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">start timestamp</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">delayed start</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">alarm flags</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">status flags</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">temp alarm hi/lo</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">cal1 / cal2 (f32)</div><div class="v"><span class="dim">·</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── HEX DUMP ──────────────────────────────────────── -->
+  <section class="panel">
+    <div class="panel-head"><span>raw sample memory</span><span class="meta" id="hex-meta">no data · download samples</span></div>
+    <pre class="hex" id="hexdump"><span class="ofs">0000</span>  <span style="color:var(--fg-4)">— no data —</span></pre>
+  </section>
+
+  <!-- ── DECODED SAMPLES ──────────────────────────────── -->
+  <section class="panel">
+    <div class="panel-head"><span>decoded samples</span><span class="meta" id="samples-meta">·</span></div>
+    <div class="panel-body tight">
+      <div class="decoder-row">
+        <label for="decoder">decoder</label>
+        <select id="decoder">
+          <option value="int16le_x10" selected>int16 LE × 0.1   (most likely · -3276.8 to +3276.7)</option>
+          <option value="int16le_x1">int16 LE × 1.0   (-32768 to +32767)</option>
+          <option value="int16le_x100">int16 LE × 0.01  (-327.68 to +327.67)</option>
+          <option value="int16be_x10">int16 BE × 0.1   (byte-swapped variant)</option>
+          <option value="uint8_div2_minus40">uint8 (b/2)−40   [EL-USB-1/2 style · sanity check]</option>
+          <option value="int16le_raw">int16 LE raw     (no scaling, inspect ADC)</option>
+        </select>
+        <span style="color:var(--fg-3);font-size:11px;margin-left:auto">tip: capture a known reference temp on the device, switch decoders until it matches</span>
+      </div>
+      <div style="max-height:420px;overflow:auto">
+        <table class="samples" id="samples">
+          <thead><tr><th>#</th><th>timestamp (utc)</th><th style="text-align:right">value</th><th style="text-align:right">raw bytes</th></tr></thead>
+          <tbody id="samples-tbody">
+            <tr><td colspan="4" style="color:var(--fg-4);text-align:center;padding:24px">— no samples —</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── LOG ───────────────────────────────────────────── -->
+  <section class="panel">
+    <div class="panel-head"><span>session log</span><span class="meta">tx ↔ rx · transfers</span></div>
+    <div class="log" id="log"></div>
+  </section>
+
+  <footer class="note">
+    <strong style="color:var(--fg-2)">how to run</strong> · WebUSB requires HTTPS or localhost (file:// is hit-or-miss).
+    From the directory containing this file: <code>python3 -m http.server 8000</code> &nbsp;then open <code>http://localhost:8000/el-usb-tc-spike.html</code> in Chrome / Edge.<br>
+    <strong style="color:var(--fg-2)">first run</strong> · plug in the EL-USB-TC, click <code>Connect</code>, pick the device from the Chrome dialog, click <code>Load Config</code>, then <code>Download Samples</code>.
+    On Linux you may need a udev rule: <code>SUBSYSTEM=="usb",ATTRS{idVendor}=="10c4",ATTRS{idProduct}=="0002",MODE="0666"</code> in <code>/etc/udev/rules.d/99-lascar.rules</code> then <code>sudo udevadm control --reload</code>.<br>
+    <strong style="color:var(--fg-2)">sample decoder</strong> · the sigrok wiki documents the 3-command protocol but not the per-sample byte format for the -TC variant. The dropdown lets you swap candidates; the most common pattern for thermocouple loggers in this family is signed 16-bit little-endian × 0.1.
+  </footer>
+
+</main>
+
+<script>
+"use strict";
+
+// ───────────────────────────────────────────────────────────
+//  protocol constants
+// ───────────────────────────────────────────────────────────
+const USB_VID = 0x10C4;
+const USB_PID = 0x0002;
+const EP_OUT  = 0x02;
+const EP_IN   = 0x82;
+const PACKET  = 64;
+
+const DEVICE_TYPES = {
+  1: 'EL-USB-1',
+  2: 'EL-USB-1 (var)',
+  3: 'EL-USB-2',
+  10: 'EL-USB-TC',
+  12: 'EL-USB-2-LCD',
+  15: 'EL-USB-TC-LCD',
+};
+
+// ───────────────────────────────────────────────────────────
+//  state
+// ───────────────────────────────────────────────────────────
+let device = null;
+let lastConfig = null;
+let lastSampleBytes = null;
+let lastDecoded = null;
+
+// ───────────────────────────────────────────────────────────
+//  DOM helpers
+// ───────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const logEl = $('log');
+const dotEl = $('status-dot');
+const statTxt = $('status-text');
+
+function setStatus(state, text) {
+  dotEl.className = 'status-dot ' + (state ? 'status-' + state : '');
+  statTxt.textContent = text;
+}
+
+function log(msg, kind = 'info') {
+  const ts = new Date().toTimeString().slice(0, 8);
+  const line = document.createElement('div');
+  line.className = 'log-line log-' + kind;
+  line.textContent = `[${ts}] ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function enableConnected(connected) {
+  $('btn-disconnect').disabled = !connected;
+  $('btn-load-config').disabled = !connected;
+  $('btn-download').disabled = !connected;
+  $('btn-connect').disabled = connected;
+}
+
+// ───────────────────────────────────────────────────────────
+//  formatting helpers
+// ───────────────────────────────────────────────────────────
+const hex2 = (n) => n.toString(16).padStart(2, '0').toUpperCase();
+const hex4 = (n) => n.toString(16).padStart(4, '0').toUpperCase();
+const pad2 = (n) => String(n).padStart(2, '0');
+const bytesHex = (buf, sep = ' ') =>
+  Array.from(buf).map(b => b.toString(16).padStart(2, '0')).join(sep).toUpperCase();
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// ───────────────────────────────────────────────────────────
+//  USB
+// ───────────────────────────────────────────────────────────
+async function connect() {
+  if (!navigator.usb) {
+    log('WebUSB not available in this browser.', 'error');
+    return;
+  }
+  try {
+    setStatus('busy', 'requesting…');
+    device = await navigator.usb.requestDevice({
+      filters: [{ vendorId: USB_VID, productId: USB_PID }]
+    });
+    log(`selected ${hex4(device.vendorId)}:${hex4(device.productId)}  ${device.productName ?? ''}`);
+    await device.open();
+    if (device.configuration === null) await device.selectConfiguration(1);
+    await device.claimInterface(0);
+    setStatus('on', `connected · ${device.productName ?? 'EL-USB-TC'}`);
+    $('device-info').textContent = `${hex4(device.vendorId)}:${hex4(device.productId)} · ${device.productName ?? '—'} · sn ${device.serialNumber ?? '?'}`;
+    log(`opened · iface 0 claimed`, 'ok');
+    log(`  manufacturer:  ${device.manufacturerName ?? '(none)'}`);
+    log(`  product:       ${device.productName ?? '(none)'}`);
+    log(`  usb serial:    ${device.serialNumber ?? '(none)'}`);
+    enableConnected(true);
+  } catch (err) {
+    log(`connect failed: ${err.message}`, 'error');
+    setStatus('err', 'error');
+    setTimeout(() => setStatus('', 'disconnected'), 2000);
+    device = null;
+  }
+}
+
+async function disconnect() {
+  if (!device) return;
+  try {
+    await device.releaseInterface(0);
+    await device.close();
+    log('closed', 'ok');
+  } catch (err) {
+    log(`disconnect: ${err.message}`, 'warn');
+  }
+  device = null;
+  setStatus('', 'disconnected');
+  $('device-info').textContent = 'no device';
+  enableConnected(false);
+}
+
+async function sendCmd(bytes) {
+  log(`→ TX EP${hex2(EP_OUT)}  ${bytesHex(bytes)}`, 'cmd');
+  const r = await device.transferOut(EP_OUT, bytes);
+  if (r.status !== 'ok') throw new Error('transferOut: ' + r.status);
+  await sleep(60);
+}
+
+async function readFramed() {
+  // Response = [0x02 LL HH ...payload...] split across 64B chunks.
+  const chunks = [];
+  let total = null;
+  let got = 0;
+  for (let i = 0; i < 4096; i++) {
+    const r = await device.transferIn(EP_IN, PACKET);
+    if (r.status !== 'ok') throw new Error('transferIn: ' + r.status);
+    const data = new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
+    if (data.length === 0) {
+      if (total !== null && got >= total) break;
+      continue;
+    }
+    if (total === null) {
+      if (data[0] !== 0x02) throw new Error(`bad header byte: 0x${hex2(data[0])} (want 0x02)`);
+      total = data[1] | (data[2] << 8);
+      log(`← RX header · payload length = ${total} bytes`);
+      const payload = data.slice(3);
+      chunks.push(payload);
+      got += payload.length;
+    } else {
+      chunks.push(data);
+      got += data.length;
+    }
+    if (i % 32 === 0 && total !== null) {
+      log(`  …received ${got}/${total} bytes`);
+    }
+    if (total !== null && got >= total) break;
+  }
+  const out = new Uint8Array(got);
+  let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.length; }
+  return out.slice(0, total);
+}
+
+// ───────────────────────────────────────────────────────────
+//  config parser  (offsets per sigrok wiki)
+// ───────────────────────────────────────────────────────────
+function parseConfig(buf) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const td = new TextDecoder('latin1');
+  const safe = (fn, ...args) => { try { return fn.apply(dv, args); } catch { return null; } };
+  const slice = (a, b) => buf.slice(a, Math.min(b, buf.length));
+  const ascii = (b) => td.decode(b).replace(/[\x00-\x08\x0e-\x1f]/g, '').trim();
+
+  return {
+    deviceType:        safe(dv.getUint8, 0x00),
+    deviceTypeName:    DEVICE_TYPES[safe(dv.getUint8, 0x00)] ?? 'unknown',
+    deviceName:        ascii(slice(0x02, 0x12)),
+    startTimestamp:    parseTimestamp(slice(0x12, 0x18)),
+    delayedStartSec:   safe(dv.getUint32, 0x18, true),
+    sampleIntervalSec: safe(dv.getUint16, 0x1c, true),
+    sampleCount:       safe(dv.getUint16, 0x1e, true),
+    alarmFlags:        safe(dv.getUint8, 0x20),
+    statusFlags:       safe(dv.getUint8, 0x21),
+    tempAlarmHiRaw:    safe(dv.getUint8, 0x22),
+    tempAlarmLoRaw:    safe(dv.getUint8, 0x23),
+    cal1:              safe(dv.getFloat32, 0x24, true),
+    cal2:              safe(dv.getFloat32, 0x28, true),
+    unit:              safe(dv.getUint16, 0x2e, true) === 0 ? 'C' : 'F',
+    firmware:          ascii(slice(0x30, 0x34)),
+    serialNumber:      safe(dv.getUint16, 0x34, true),
+    rawLen:            buf.length,
+    raw:               buf,
+  };
+}
+
+function parseTimestamp(b) {
+  if (b.length < 6) return null;
+  const [yy, mm, dd, hh, mi, ss] = b;
+  const Y = 2000 + yy;
+  const valid = mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31 && hh < 24 && mi < 60 && ss < 60;
+  return {
+    raw: Array.from(b),
+    rawHex: bytesHex(b),
+    iso: valid ? `${Y}-${pad2(mm)}-${pad2(dd)} ${pad2(hh)}:${pad2(mi)}:${pad2(ss)}` : null,
+    epoch: valid ? Date.UTC(Y, mm - 1, dd, hh, mi, ss) / 1000 : null,
+  };
+}
+
+// ───────────────────────────────────────────────────────────
+//  sample decoders  (swappable — verify against known temp)
+// ───────────────────────────────────────────────────────────
+const DECODERS = {
+  int16le_x10: {
+    width: 2,
+    decode: (b, i) => { const v = (b[i*2+1] << 8) | b[i*2]; return (v > 0x7fff ? v - 0x10000 : v) / 10; },
+  },
+  int16le_x1: {
+    width: 2,
+    decode: (b, i) => { const v = (b[i*2+1] << 8) | b[i*2]; return v > 0x7fff ? v - 0x10000 : v; },
+  },
+  int16le_x100: {
+    width: 2,
+    decode: (b, i) => { const v = (b[i*2+1] << 8) | b[i*2]; return (v > 0x7fff ? v - 0x10000 : v) / 100; },
+  },
+  int16be_x10: {
+    width: 2,
+    decode: (b, i) => { const v = (b[i*2] << 8) | b[i*2+1]; return (v > 0x7fff ? v - 0x10000 : v) / 10; },
+  },
+  uint8_div2_minus40: {
+    width: 1,
+    decode: (b, i) => b[i] / 2 - 40,
+  },
+  int16le_raw: {
+    width: 2,
+    decode: (b, i) => { const v = (b[i*2+1] << 8) | b[i*2]; return v > 0x7fff ? v - 0x10000 : v; },
+  },
+};
+
+// ───────────────────────────────────────────────────────────
+//  high-level operations
+// ───────────────────────────────────────────────────────────
+async function loadConfig() {
+  if (!device) return;
+  try {
+    setStatus('busy', 'loading config…');
+    log('── LOAD CONFIG ──', 'cmd');
+    await sendCmd(new Uint8Array([0x00, 0xFF, 0xFF]));
+    const buf = await readFramed();
+    log(`config received · ${buf.length} bytes`, 'ok');
+    lastConfig = parseConfig(buf);
+    renderConfig(lastConfig);
+    setStatus('on', `connected · ${lastConfig.deviceTypeName}`);
+  } catch (err) {
+    log(`loadConfig: ${err.message}`, 'error');
+    setStatus('err', 'error');
+  }
+}
+
+async function downloadSamples() {
+  if (!device) return;
+  if (!lastConfig) {
+    log('load config first — need sample count and interval to interpret data', 'warn');
+    return;
+  }
+  try {
+    setStatus('busy', 'downloading…');
+    log('── DOWNLOAD SAMPLES ──', 'cmd');
+    await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
+    const buf = await readFramed();
+    log(`samples received · ${buf.length} bytes`, 'ok');
+    lastSampleBytes = buf;
+    renderHexDump(buf);
+    decodeAndRender();
+    setStatus('on', `connected · ${lastConfig.sampleCount} samples`);
+  } catch (err) {
+    log(`downloadSamples: ${err.message}`, 'error');
+    setStatus('err', 'error');
+  }
+}
+
+function decodeAndRender() {
+  if (!lastSampleBytes || !lastConfig) return;
+  const key = $('decoder').value;
+  const dec = DECODERS[key];
+  const expected = lastConfig.sampleCount ?? 0;
+  const possible = Math.floor(lastSampleBytes.length / dec.width);
+  const n = Math.min(expected, possible);
+  log(`decoder=${key}  width=${dec.width}  decoding ${n} of ${expected} samples`);
+
+  const interval = lastConfig.sampleIntervalSec ?? 0;
+  const startEpoch = lastConfig.startTimestamp?.epoch ?? null;
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const value = dec.decode(lastSampleBytes, i);
+    const rawBytes = Array.from(lastSampleBytes.slice(i * dec.width, (i + 1) * dec.width));
+    let ts = '';
+    if (startEpoch !== null) {
+      const t = (startEpoch + i * interval) * 1000;
+      ts = new Date(t).toISOString().replace('T', ' ').replace('Z', '').slice(0, 19);
+    }
+    rows.push({ i: i + 1, ts, value, rawBytes });
+  }
+  lastDecoded = rows;
+  renderSamples(rows);
+}
+
+// ───────────────────────────────────────────────────────────
+//  rendering
+// ───────────────────────────────────────────────────────────
+function renderConfig(c) {
+  const fmt = (v, suffix = '') => {
+    if (v === null || v === undefined || v === '') return '<span class="dim">·</span>';
+    return String(v) + suffix;
+  };
+  const accent = (v) => `<span class="accent">${v}</span>`;
+
+  const html = [
+    ['device type',        `${accent(c.deviceType)} · ${c.deviceTypeName}`],
+    ['device name',        fmt(c.deviceName)],
+    ['serial number',      accent(fmt(c.serialNumber))],
+    ['firmware',           fmt(c.firmware)],
+    ['unit',               accent('°' + c.unit)],
+    ['sample interval',    `${accent(c.sampleIntervalSec)} <span class="dim">sec</span>`],
+    ['sample count',       `${accent(c.sampleCount)} <span class="dim">/ 32510 max</span>`],
+    ['start timestamp',    c.startTimestamp?.iso
+      ? `${accent(c.startTimestamp.iso)} <span class="raw">(raw ${c.startTimestamp.rawHex})</span>`
+      : `<span class="dim">·</span> <span class="raw">(raw ${c.startTimestamp?.rawHex ?? ''})</span>`],
+    ['delayed start',      `${fmt(c.delayedStartSec, ' sec')}`],
+    ['alarm flags',        `<span class="raw">0x${hex2(c.alarmFlags ?? 0)}</span>`],
+    ['status flags',       `<span class="raw">0x${hex2(c.statusFlags ?? 0)}</span> · logging=${(c.statusFlags & 0x10) ? 'on' : 'off'}`],
+    ['temp alarm hi/lo',   `${((c.tempAlarmHiRaw ?? 0) / 2 - 40).toFixed(1)} / ${((c.tempAlarmLoRaw ?? 0) / 2 - 40).toFixed(1)} °${c.unit}`],
+    ['cal1 / cal2 (f32)',  `${(c.cal1 ?? 0).toFixed(4)} / ${(c.cal2 ?? 0).toFixed(4)}`],
+  ].map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
+
+  $('config-kv').innerHTML = html;
+  $('cfg-meta').textContent = `${c.rawLen} byte struct · type ${c.deviceType}`;
+}
+
+function renderHexDump(buf) {
+  const max = Math.min(buf.length, 1024);
+  const lines = [];
+  for (let i = 0; i < max; i += 16) {
+    const ofs = i.toString(16).padStart(4, '0');
+    const hexes = [];
+    const chars = [];
+    for (let j = 0; j < 16; j++) {
+      const k = i + j;
+      if (k >= buf.length) {
+        hexes.push('  ');
+        chars.push(' ');
+      } else {
+        hexes.push(buf[k].toString(16).padStart(2, '0'));
+        const c = buf[k];
+        chars.push(c >= 0x20 && c < 0x7f ? escapeHtml(String.fromCharCode(c)) : '·');
+      }
+    }
+    const hex = hexes.slice(0, 8).join(' ') + '  ' + hexes.slice(8, 16).join(' ');
+    lines.push(`<span class="ofs">${ofs}</span>  ${hex}  <span class="asc">|${chars.join('')}|</span>`);
+  }
+  $('hexdump').innerHTML = lines.join('\n');
+  $('hex-meta').textContent = `${max} of ${buf.length} bytes shown`;
+}
+
+function renderSamples(rows) {
+  const tbody = $('samples-tbody');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--fg-4);text-align:center;padding:24px">— no samples —</td></tr>`;
+    $('samples-meta').textContent = '·';
+    return;
+  }
+  const display = rows.slice(0, 500);
+  const unit = lastConfig.unit;
+  const html = display.map(r => `
+    <tr>
+      <td class="idx">${r.i}</td>
+      <td>${r.ts || '<span style="color:var(--fg-4)">·</span>'}</td>
+      <td class="num">${r.value.toFixed(2)} <span style="color:var(--fg-3)">°${unit}</span></td>
+      <td class="num" style="color:var(--fg-3);font-size:11px">${r.rawBytes.map(b => b.toString(16).padStart(2,'0')).join(' ').toUpperCase()}</td>
+    </tr>`).join('');
+  tbody.innerHTML = html;
+  $('samples-meta').textContent = `${rows.length} samples · showing first ${display.length}`;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ───────────────────────────────────────────────────────────
+//  CSV export
+// ───────────────────────────────────────────────────────────
+function exportCsv() {
+  if (!lastDecoded || lastDecoded.length === 0) {
+    log('no decoded samples to export — download samples first', 'warn');
+    return;
+  }
+  const unit = lastConfig.unit;
+  const lines = [];
+  lines.push(`# Lascar EL-USB-TC export`);
+  lines.push(`# device_type,${lastConfig.deviceType},${lastConfig.deviceTypeName}`);
+  lines.push(`# device_name,${lastConfig.deviceName}`);
+  lines.push(`# serial_number,${lastConfig.serialNumber}`);
+  lines.push(`# firmware,${lastConfig.firmware}`);
+  lines.push(`# sample_interval_sec,${lastConfig.sampleIntervalSec}`);
+  lines.push(`# sample_count,${lastConfig.sampleCount}`);
+  lines.push(`# start_timestamp,${lastConfig.startTimestamp?.iso ?? ''}`);
+  lines.push(`# decoder,${$('decoder').value}`);
+  lines.push(`# unit,${unit}`);
+  lines.push(`# exported,${new Date().toISOString()}`);
+  lines.push(`index,timestamp_utc,temperature_${unit},raw_bytes_hex`);
+  for (const s of lastDecoded) {
+    const raw = s.rawBytes.map(b => b.toString(16).padStart(2,'0')).join('');
+    lines.push(`${s.i},${s.ts},${s.value.toFixed(3)},${raw}`);
+  }
+  const csv = lines.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const sn = lastConfig.serialNumber ?? '0000';
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const fname = `el-usb-tc-${sn}-${ts}.csv`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  log(`exported ${lastDecoded.length} samples → ${fname}`, 'ok');
+}
+
+// ───────────────────────────────────────────────────────────
+//  init
+// ───────────────────────────────────────────────────────────
+$('btn-connect').addEventListener('click', connect);
+$('btn-disconnect').addEventListener('click', disconnect);
+$('btn-load-config').addEventListener('click', loadConfig);
+$('btn-download').addEventListener('click', downloadSamples);
+$('btn-export').addEventListener('click', exportCsv);
+$('btn-clear-log').addEventListener('click', () => { logEl.innerHTML = ''; log('log cleared'); });
+$('decoder').addEventListener('change', decodeAndRender);
+
+if (!navigator.usb) {
+  $('webusb-warning').hidden = false;
+}
+enableConnected(false);
+setStatus('', 'disconnected');
+log('ready · plug in EL-USB-TC and click Connect', 'info');
+log(`looking for VID:PID ${hex4(USB_VID)}:${hex4(USB_PID)}  (Silicon Labs USBXpress)`);
+
+</script>
+</body>
+</html>

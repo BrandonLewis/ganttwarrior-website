@@ -11,3 +11,7 @@ class FeaturesView(TemplateView):
 
 class AboutView(TemplateView):
     template_name = "pages/about.html"
+
+
+class MonitorView(TemplateView):
+    template_name = "pages/monitor.html"
