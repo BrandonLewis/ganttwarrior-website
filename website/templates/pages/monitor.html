@@ -373,6 +373,7 @@
       <div class="actions">
         <button id="btn-connect" class="primary">Connect</button>
         <button id="btn-disconnect" class="ghost">Disconnect</button>
+        <button id="btn-init" class="ghost" title="SiLabs F32x vendor mode-setup. Only click if Load Config / Download Samples isn't responding. Running this more than once per device power-cycle has been observed to corrupt user-set fields on EL-USB-TC firmware.">Initialize device</button>
       </div>
     </div>
   </section>
@@ -526,6 +527,7 @@ function enableConnected(connected) {
   $('btn-disconnect').disabled = !connected;
   $('btn-load-config').disabled = !connected || busy;
   $('btn-download').disabled = !connected || busy;
+  $('btn-init').disabled = !connected || busy;
   $('btn-connect').disabled = connected;
 }
 
@@ -536,6 +538,7 @@ function setBusy(b) {
   busy = b;
   $('btn-load-config').disabled = !device || busy;
   $('btn-download').disabled = !device || busy;
+  $('btn-init').disabled = !device || busy;
 }
 
 // ───────────────────────────────────────────────────────────
@@ -574,7 +577,13 @@ async function connect() {
     if (device.configuration === null) await device.selectConfiguration(1);
     await device.claimInterface(0);
     await clearEndpoints();
-    await f32xInit();
+    // f32xInit() is intentionally NOT called here. Running those vendor
+    // control transfers more than once per device power-cycle corrupts
+    // user-set RAM fields (name, alarm flags, logging state). They were
+    // originally added to fix a "no IN response" symptom that was actually
+    // caused by the redundant selectConfiguration we've since removed.
+    // If the device truly needs them, click "Initialize device" — that
+    // path is opt-in so the user owns the corruption risk.
     setStatus('on', `connected · ${device.productName ?? 'EL-USB-TC'}`);
     $('device-info').textContent = `${hex4(device.vendorId)}:${hex4(device.productId)} · ${device.productName ?? '—'} · sn ${device.serialNumber ?? '?'}`;
     log(`opened · iface 0 claimed · F32x primed`, 'ok');
@@ -976,6 +985,20 @@ function exportCsv() {
 // ───────────────────────────────────────────────────────────
 $('btn-connect').addEventListener('click', connect);
 $('btn-disconnect').addEventListener('click', disconnect);
+$('btn-init').addEventListener('click', async () => {
+  if (!device) { log('not connected', 'warn'); return; }
+  if (busy) { log('command in flight, wait', 'warn'); return; }
+  setBusy(true);
+  try {
+    log('── INITIALIZE DEVICE ── (SiLabs F32x vendor mode-setup)', 'cmd');
+    await f32xInit();
+    log('init sent · WARNING: running this more than once per device power-cycle has corrupted EL-USB-TC user-set fields in testing', 'warn');
+  } catch (err) {
+    log(`init failed: ${err.message}`, 'error');
+  } finally {
+    setBusy(false);
+  }
+});
 $('btn-load-config').addEventListener('click', loadConfig);
 $('btn-download').addEventListener('click', downloadSamples);
 $('btn-export').addEventListener('click', exportCsv);
