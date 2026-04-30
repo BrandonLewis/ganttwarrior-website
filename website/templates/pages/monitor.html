@@ -563,10 +563,15 @@ async function connect() {
     });
     log(`selected ${hex4(device.vendorId)}:${hex4(device.productId)}  ${device.productName ?? ''}`);
     await device.open();
-    // Re-issue SET_CONFIGURATION even if the kernel already configured the
-    // device — some USBXpress firmware initialises bulk state on the host's
-    // explicit selectConfiguration, not on the kernel's default.
-    await device.selectConfiguration(1);
+    // Only issue SET_CONFIGURATION if the kernel hasn't already configured
+    // the device. On Linux it almost always has, since no kernel driver is
+    // bound and enumeration sets a default config. libsigrok never calls
+    // set_configuration on these devices, and we observed that an
+    // unconditional re-issue corrupts user-set fields (device name, alarm
+    // flags, logging state) on the EL-USB-TC firmware — apparently the
+    // chip treats SET_CONFIGURATION as a soft-reset that clears RAM-backed
+    // settings while leaving factory cal/serial/type intact.
+    if (device.configuration === null) await device.selectConfiguration(1);
     await device.claimInterface(0);
     await clearEndpoints();
     await f32xInit();
