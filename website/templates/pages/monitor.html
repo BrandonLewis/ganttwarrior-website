@@ -498,6 +498,7 @@ let device = null;
 let lastConfig = null;
 let lastSampleBytes = null;
 let lastDecoded = null;
+let busy = false;   // true while a Load Config / Download Samples is in flight
 
 // ───────────────────────────────────────────────────────────
 //  DOM helpers
@@ -523,9 +524,18 @@ function log(msg, kind = 'info') {
 
 function enableConnected(connected) {
   $('btn-disconnect').disabled = !connected;
-  $('btn-load-config').disabled = !connected;
-  $('btn-download').disabled = !connected;
+  $('btn-load-config').disabled = !connected || busy;
+  $('btn-download').disabled = !connected || busy;
   $('btn-connect').disabled = connected;
+}
+
+function setBusy(b) {
+  // While a bulk command is in flight, disable the command buttons. We
+  // can't allow concurrent transferIn loops on the same endpoint —
+  // they'd steal each other's packets and produce scrambled responses.
+  busy = b;
+  $('btn-load-config').disabled = !device || busy;
+  $('btn-download').disabled = !device || busy;
 }
 
 // ───────────────────────────────────────────────────────────
@@ -585,6 +595,7 @@ async function disconnect() {
     log(`disconnect: ${err.message}`, 'warn');
   }
   device = null;
+  busy = false;
   setStatus('', 'disconnected');
   $('device-info').textContent = 'no device';
   enableConnected(false);
@@ -759,6 +770,8 @@ const DECODERS = {
 // ───────────────────────────────────────────────────────────
 async function loadConfig() {
   if (!device) return;
+  if (busy) { log('command already in flight — wait for it to finish or click Disconnect', 'warn'); return; }
+  setBusy(true);
   try {
     setStatus('busy', 'loading config…');
     log('── LOAD CONFIG ──', 'cmd');
@@ -771,15 +784,19 @@ async function loadConfig() {
   } catch (err) {
     log(`loadConfig: ${err.message}`, 'error');
     setStatus('err', 'error');
+  } finally {
+    setBusy(false);
   }
 }
 
 async function downloadSamples() {
   if (!device) return;
+  if (busy) { log('command already in flight — wait for it to finish or click Disconnect', 'warn'); return; }
   if (!lastConfig) {
     log('load config first — need sample count and interval to interpret data', 'warn');
     return;
   }
+  setBusy(true);
   try {
     setStatus('busy', 'downloading…');
     log('── DOWNLOAD SAMPLES ──', 'cmd');
@@ -793,6 +810,8 @@ async function downloadSamples() {
   } catch (err) {
     log(`downloadSamples: ${err.message}`, 'error');
     setStatus('err', 'error');
+  } finally {
+    setBusy(false);
   }
 }
 
