@@ -499,7 +499,8 @@ let device = null;
 let lastConfig = null;
 let lastSampleBytes = null;
 let lastDecoded = null;
-let busy = false;   // true while a Load Config / Download Samples is in flight
+let busy = false;        // true while a Load Config / Download Samples is in flight
+let needsCycle = false;  // set after a Download — the device goes silent until the handle is cycled
 
 // ───────────────────────────────────────────────────────────
 //  DOM helpers
@@ -610,6 +611,7 @@ async function disconnect() {
   }
   device = null;
   busy = false;
+  needsCycle = false;
   setStatus('', 'disconnected');
   $('device-info').textContent = 'no device';
   enableConnected(false);
@@ -619,6 +621,21 @@ async function clearEndpoints() {
   // Standard USB CLEAR_FEATURE(ENDPOINT_HALT). Side-effect-free.
   try { await device.clearHalt('out', EP_OUT); } catch (e) { /* benign */ }
   try { await device.clearHalt('in',  EP_IN);  } catch (e) { /* benign */ }
+}
+
+async function cycleHandle() {
+  // Close + re-open the USB handle to recover from the post-download
+  // silent state on EL-USB-TC firmware. No vendor commands, no
+  // SET_CONFIGURATION (we skip it if the kernel already has one set,
+  // which is always true on Linux). Just a clean handle reset that
+  // doesn't touch device state.
+  log('cycling USB handle (post-download recovery)…', 'warn');
+  try { await device.releaseInterface(0); } catch (e) { /* benign */ }
+  try { await device.close(); } catch (e) { /* benign */ }
+  await device.open();
+  if (device.configuration === null) await device.selectConfiguration(1);
+  await device.claimInterface(0);
+  await clearEndpoints();
 }
 
 async function f32xInit() {
@@ -787,6 +804,7 @@ async function loadConfig() {
   if (busy) { log('command already in flight — wait for it to finish or click Disconnect', 'warn'); return; }
   setBusy(true);
   try {
+    if (needsCycle) { await cycleHandle(); needsCycle = false; }
     setStatus('busy', 'loading config…');
     log('── LOAD CONFIG ──', 'cmd');
     await sendCmd(new Uint8Array([0x00, 0xFF, 0xFF]));
@@ -812,6 +830,7 @@ async function downloadSamples() {
   }
   setBusy(true);
   try {
+    if (needsCycle) { await cycleHandle(); needsCycle = false; }
     setStatus('busy', 'downloading…');
     log('── DOWNLOAD SAMPLES ──', 'cmd');
     await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
@@ -820,6 +839,7 @@ async function downloadSamples() {
     lastSampleBytes = buf;
     renderHexDump(buf);
     decodeAndRender();
+    needsCycle = true;  // device goes silent after a download; cycle before next command
     setStatus('on', `connected · ${lastConfig.sampleCount} samples`);
   } catch (err) {
     log(`downloadSamples: ${err.message}`, 'error');
