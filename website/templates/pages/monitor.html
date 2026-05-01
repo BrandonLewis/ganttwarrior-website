@@ -887,22 +887,40 @@ async function saveConfig(modifiedBytes) {
   log(`→ TX EP${hex2(EP_OUT)}  256 bytes (modified config)`, 'cmd');
   r = await device.transferOut(EP_OUT, modifiedBytes);
   if (r.status !== 'ok') throw new Error('save payload transferOut: ' + r.status);
-  // Wait for single-byte 0xff ACK on EP IN.
-  const ackResp = await device.transferIn(EP_IN, 64);
-  if (ackResp.status !== 'ok') throw new Error('save ACK transferIn: ' + ackResp.status);
-  const ackBytes = new Uint8Array(ackResp.data.buffer, ackResp.data.byteOffset, ackResp.data.byteLength);
-  if (ackBytes.length === 0 || ackBytes[0] !== 0xff) {
-    throw new Error(`Save Config ACK mismatch — expected 0xff, got [${bytesHex(ackBytes)}]`);
+
+  // Flash write takes time; the ACK can be preceded by a zero-length packet
+  // and the firmware may not respond on the very first transferIn. Poll for
+  // up to ~3 s, accepting 0xFF anywhere in any returned packet.
+  const deadline = performance.now() + 3000;
+  let attempts = 0;
+  while (performance.now() < deadline) {
+    attempts++;
+    const ackResp = await device.transferIn(EP_IN, 64);
+    if (ackResp.status !== 'ok') {
+      throw new Error('save ACK transferIn: ' + ackResp.status);
+    }
+    const ackBytes = new Uint8Array(ackResp.data.buffer, ackResp.data.byteOffset, ackResp.data.byteLength);
+    if (ackBytes.length === 0) {
+      // ZLP or no data yet — wait a bit and try again.
+      await sleep(150);
+      continue;
+    }
+    if (ackBytes.includes(0xff)) {
+      log(`save ACK = ${bytesHex(ackBytes)} (0xff present, attempt ${attempts})`, 'ok');
+      return;
+    }
+    throw new Error(`Save Config unexpected response: [${bytesHex(ackBytes)}]`);
   }
-  log(`save ACK = 0x${hex2(ackBytes[0])}  (success)`, 'ok');
+  throw new Error(`Save Config: no ACK after ${attempts} polls over 3 s`);
 }
 
 async function restartLogging() {
-  if (!device) { log('not connected', 'warn'); return; }
-  if (busy) { log('command in flight, wait', 'warn'); return; }
+  // Throws on failure so callers (atomicRead) can react. The standalone
+  // button handler wraps this in its own try/catch for UI feedback.
+  if (!device) throw new Error('not connected');
+  if (busy) throw new Error('command in flight, wait');
   if (!lastConfig?.raw) {
-    log('load config first — restart needs the current config block to modify', 'warn');
-    return;
+    throw new Error('load config first — restart needs the current config block to modify');
   }
   setBusy(true);
   try {
@@ -928,10 +946,7 @@ async function restartLogging() {
     log(`new start = ${now.toString().slice(0, 24)} · sampleCount → 0 · status 0x${hex2(cfg[0x21])}`);
     await saveConfig(cfg);
     needsCycle = true;  // treat like a download — cycle handle if any further commands
-    log('✓ logging restarted · disconnect and redeploy the sensor', 'ok');
-  } catch (err) {
-    log(`restartLogging failed: ${err.message}`, 'error');
-    log('  device state may be uncertain — verify with Load Config before disconnecting', 'warn');
+    log('✓ logging restart sent · verify by Disconnect → reconnect → Load Config', 'ok');
   } finally {
     setBusy(false);
   }
@@ -1145,7 +1160,13 @@ async function atomicRead({ andRestart }) {
 
 $('btn-read-sensor').addEventListener('click', () => atomicRead({ andRestart: false }));
 $('btn-read-and-restart').addEventListener('click', () => atomicRead({ andRestart: true }));
-$('btn-restart-logging').addEventListener('click', restartLogging);
+$('btn-restart-logging').addEventListener('click', async () => {
+  try { await restartLogging(); }
+  catch (err) {
+    log(`restartLogging failed: ${err.message}`, 'error');
+    log('  device state may be uncertain — verify with Load Config before disconnecting', 'warn');
+  }
+});
 $('btn-load-config').addEventListener('click', loadConfig);
 $('btn-download').addEventListener('click', downloadSamples);
 $('btn-export').addEventListener('click', exportCsv);
