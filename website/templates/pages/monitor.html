@@ -383,6 +383,7 @@
     <div class="panel-head"><span>protocol</span><span class="meta">three commands per the sigrok wiki</span></div>
     <div class="panel-body">
       <div class="actions">
+        <button id="btn-read-sensor" class="primary" title="One-click safe read: initialize → load config → download samples → export CSV. Recommended for batch reading multiple sensors.">Read sensor → CSV</button>
         <button id="btn-load-config">Load Config &nbsp;<span style="color:var(--fg-3);font-weight:400">[00 FF FF]</span></button>
         <button id="btn-download">Download Samples &nbsp;<span style="color:var(--fg-3);font-weight:400">[03 FF FF]</span></button>
         <button id="btn-export" class="ghost">Export CSV</button>
@@ -426,20 +427,15 @@
       <div class="decoder-row">
         <label for="decoder">decoder</label>
         <select id="decoder">
-          <option value="int16be_cal" selected>int16 BE × cal2 + cal1   (EL-USB-TC factory calibration · °C/°F per device config)</option>
-          <option value="int16be_x10">int16 BE × 0.1   (fallback · uncalibrated)</option>
-          <option value="int16le_x10">int16 LE × 0.1   (alt endianness)</option>
+          <option value="el_usb_tc" selected>EL-USB-TC  ((raw − 3280) / 10 °F)   verified vs EasyLog</option>
+          <option value="int16be_cal">int16 BE × cal2 + cal1   (raw mV-style calibration · diagnostic only)</option>
+          <option value="int16be_x10">int16 BE × 0.1</option>
+          <option value="int16le_x10">int16 LE × 0.1</option>
           <option value="int16le_x100">int16 LE × 0.01</option>
           <option value="int16be_raw">int16 BE raw     (inspect ADC counts)</option>
           <option value="int16le_raw">int16 LE raw</option>
           <option value="uint8_div2_minus40">uint8 (b/2)−40   [EL-USB-1/2 style · sanity check]</option>
         </select>
-        <label for="offset" style="margin-left:18px">offset</label>
-        <input type="number" id="offset" step="0.01" placeholder="0.00" value="0" style="width:80px;font-family:var(--mono);font-size:12px;background:var(--panel);color:var(--fg);border:1px solid var(--border);padding:6px 8px;">
-        <button id="btn-calibrate" class="ghost" style="padding:6px 10px;font-size:11px">Calibrate from latest</button>
-      </div>
-      <div class="decoder-row" style="border-top:1px dashed var(--border);font-size:11px;color:var(--fg-3)">
-        <span>cal: subtracted from every decoded value. Set offset by hand, or click <span style="color:var(--teal)">Calibrate from latest</span> after typing your reference temp into the offset field — it'll compute (last sample − your reference).</span>
       </div>
       <div style="max-height:420px;overflow:auto">
         <table class="samples" id="samples">
@@ -501,6 +497,7 @@ let lastSampleBytes = null;
 let lastDecoded = null;
 let busy = false;        // true while a Load Config / Download Samples is in flight
 let needsCycle = false;  // set after a Download — the device goes silent until the handle is cycled
+let initDone = false;    // f32xInit has already run this session — skip on subsequent atomic reads
 
 // ───────────────────────────────────────────────────────────
 //  DOM helpers
@@ -529,6 +526,7 @@ function enableConnected(connected) {
   $('btn-load-config').disabled = !connected || busy;
   $('btn-download').disabled = !connected || busy;
   $('btn-init').disabled = !connected || busy;
+  $('btn-read-sensor').disabled = !connected || busy;
   $('btn-connect').disabled = connected;
 }
 
@@ -540,6 +538,7 @@ function setBusy(b) {
   $('btn-load-config').disabled = !device || busy;
   $('btn-download').disabled = !device || busy;
   $('btn-init').disabled = !device || busy;
+  $('btn-read-sensor').disabled = !device || busy;
 }
 
 // ───────────────────────────────────────────────────────────
@@ -612,6 +611,7 @@ async function disconnect() {
   device = null;
   busy = false;
   needsCycle = false;
+  initDone = false;
   setStatus('', 'disconnected');
   $('device-info').textContent = 'no device';
   enableConnected(false);
@@ -758,14 +758,22 @@ function parseTimestamp(b) {
 // ───────────────────────────────────────────────────────────
 //  sample decoders  (swappable — verify against known temp)
 //
-//  Reverse-engineered for EL-USB-TC: samples are 16-bit big-endian ADC
-//  counts and the device's per-unit factory calibration is in cal1/cal2.
-//  Verified against live readings: raw 0x0FC9 × cal2 (0.0218) ≈ 88.1 °F.
+//  EL-USB-TC: samples are 16-bit big-endian, encoded as (°F × 10) + 3280.
+//  Validated against an EasyLog CSV export (Sensor 111, 446 samples):
+//  K = 3280 fits 100% of samples within EasyLog's 0.5 °F rounding.
+//  cal1 / cal2 in the config block are NOT the °F decoder — they appear
+//  to be ADC mV calibration constants used internally by firmware.
 // ───────────────────────────────────────────────────────────
 function be_i16(b, off) { const v = (b[off] << 8) | b[off+1]; return v > 0x7fff ? v - 0x10000 : v; }
 function le_i16(b, off) { const v = (b[off+1] << 8) | b[off]; return v > 0x7fff ? v - 0x10000 : v; }
 
+const EL_USB_TC_K = 3280;  // raw count for 0 °F, hardcoded in firmware
+
 const DECODERS = {
+  el_usb_tc: {
+    width: 2,
+    decode: (b, i) => (be_i16(b, i*2) - EL_USB_TC_K) / 10,
+  },
   int16be_cal: {
     width: 2,
     decode: (b, i, cfg) => be_i16(b, i*2) * (cfg?.cal2 ?? 1) + (cfg?.cal1 ?? 0),
@@ -853,17 +861,16 @@ function decodeAndRender() {
   if (!lastSampleBytes || !lastConfig) return;
   const key = $('decoder').value;
   const dec = DECODERS[key];
-  const offset = parseFloat($('offset').value) || 0;
   const expected = lastConfig.sampleCount ?? 0;
   const possible = Math.floor(lastSampleBytes.length / dec.width);
   const n = Math.min(expected, possible);
-  log(`decoder=${key}  width=${dec.width}  offset=${offset.toFixed(2)}  decoding ${n} of ${expected} samples`);
+  log(`decoder=${key}  width=${dec.width}  decoding ${n} of ${expected} samples`);
 
   const interval = lastConfig.sampleIntervalSec ?? 0;
   const startEpoch = lastConfig.startTimestamp?.epoch ?? null;
   const rows = [];
   for (let i = 0; i < n; i++) {
-    const value = dec.decode(lastSampleBytes, i, lastConfig) - offset;
+    const value = dec.decode(lastSampleBytes, i, lastConfig);
     const rawBytes = Array.from(lastSampleBytes.slice(i * dec.width, (i + 1) * dec.width));
     let ts = '';
     if (startEpoch !== null) {
@@ -976,7 +983,6 @@ function exportCsv() {
   lines.push(`# sample_count,${lastConfig.sampleCount}`);
   lines.push(`# start_timestamp,${lastConfig.startTimestamp?.iso ?? ''}`);
   lines.push(`# decoder,${$('decoder').value}`);
-  lines.push(`# calibration_offset,${$('offset').value}`);
   lines.push(`# unit,${unit}`);
   lines.push(`# exported,${new Date().toISOString()}`);
   lines.push(`index,timestamp_utc,temperature_${unit},raw_bytes_hex`);
@@ -1008,15 +1014,47 @@ $('btn-disconnect').addEventListener('click', disconnect);
 $('btn-init').addEventListener('click', async () => {
   if (!device) { log('not connected', 'warn'); return; }
   if (busy) { log('command in flight, wait', 'warn'); return; }
+  if (initDone) {
+    log('init already ran this session · skipping (running f32xInit twice corrupts metadata)', 'warn');
+    return;
+  }
   setBusy(true);
   try {
     log('── INITIALIZE DEVICE ── (SiLabs F32x vendor mode-setup)', 'cmd');
     await f32xInit();
-    log('init sent · WARNING: running this more than once per device power-cycle has corrupted EL-USB-TC user-set fields in testing', 'warn');
+    initDone = true;
+    log('init sent · do NOT click Initialize again until you disconnect/reconnect', 'ok');
   } catch (err) {
     log(`init failed: ${err.message}`, 'error');
   } finally {
     setBusy(false);
+  }
+});
+
+$('btn-read-sensor').addEventListener('click', async () => {
+  // Atomic safe-read for batch sensor work: f32xInit (once) → loadConfig
+  // → downloadSamples → exportCsv. No double-init, no chance to misclick
+  // between steps.
+  if (!device) { log('not connected', 'warn'); return; }
+  if (busy) { log('command in flight, wait', 'warn'); return; }
+  log('── READ SENSOR (atomic) ──', 'cmd');
+  try {
+    if (!initDone) {
+      setBusy(true);
+      try { await f32xInit(); initDone = true; log('init done', 'ok'); }
+      finally { setBusy(false); }
+    } else {
+      log('skipping init — already ran this session', 'info');
+    }
+    await loadConfig();
+    if (!lastConfig) throw new Error('Load Config did not return data');
+    await downloadSamples();
+    if (!lastSampleBytes) throw new Error('Download Samples did not return data');
+    exportCsv();
+    log(`✓ sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · ` +
+        `${lastConfig.sampleCount} samples · CSV exported · safe to Disconnect`, 'ok');
+  } catch (err) {
+    log(`atomic read failed: ${err.message}`, 'error');
   }
 });
 $('btn-load-config').addEventListener('click', loadConfig);
@@ -1024,28 +1062,6 @@ $('btn-download').addEventListener('click', downloadSamples);
 $('btn-export').addEventListener('click', exportCsv);
 $('btn-clear-log').addEventListener('click', () => { logEl.innerHTML = ''; log('log cleared'); });
 $('decoder').addEventListener('change', decodeAndRender);
-$('offset').addEventListener('input', decodeAndRender);
-$('btn-calibrate').addEventListener('click', () => {
-  if (!lastDecoded || lastDecoded.length === 0) {
-    log('no samples yet — download samples first, then enter your reference temp', 'warn');
-    return;
-  }
-  const ref = parseFloat($('offset').value);
-  if (Number.isNaN(ref)) {
-    log('type your current reference temperature into the offset field, then click Calibrate', 'warn');
-    return;
-  }
-  // The offset field currently holds the user's reference reading (what the
-  // probe should be reading). Compute offset so the most recent decoded
-  // sample matches it: offset = raw_decoded_last - reference.
-  const dec = DECODERS[$('decoder').value];
-  const lastIdx = lastDecoded.length - 1;
-  const rawLastDecoded = dec.decode(lastSampleBytes, lastIdx, lastConfig);
-  const newOffset = rawLastDecoded - ref;
-  $('offset').value = newOffset.toFixed(3);
-  log(`calibrated · last sample raw-decoded ${rawLastDecoded.toFixed(2)} · reference ${ref} · offset ${newOffset.toFixed(3)}`, 'ok');
-  decodeAndRender();
-});
 
 if (!navigator.usb) {
   $('webusb-warning').hidden = false;
