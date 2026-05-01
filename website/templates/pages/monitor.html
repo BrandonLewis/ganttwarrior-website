@@ -383,13 +383,16 @@
     <div class="panel-head"><span>protocol</span><span class="meta">three commands per the sigrok wiki</span></div>
     <div class="panel-body">
       <div class="actions">
-        <button id="btn-read-and-restart" class="primary" title="Field workflow: initialize → load config → download samples → export CSV → restart logging. The sensor is left recording with a fresh start timestamp and sample count 0. Use this for batch field-recovery work.">Read &amp; Restart Logging → CSV</button>
-        <button id="btn-read-sensor" title="Read-only: initialize → load config → download samples → export CSV. Does NOT restart logging — use this if you only want the data and will reset on Windows EasyLog later.">Read sensor → CSV</button>
+        <button id="btn-read-sensor" class="primary" title="Initialize → load config → download samples → export CSV. Read-only — touches no flash. Sensor will need an EasyLog reset later before it can resume logging.">Read sensor → CSV</button>
         <button id="btn-load-config">Load Config &nbsp;<span style="color:var(--fg-3);font-weight:400">[00 FF FF]</span></button>
         <button id="btn-download">Download Samples &nbsp;<span style="color:var(--fg-3);font-weight:400">[03 FF FF]</span></button>
-        <button id="btn-restart-logging" class="ghost" title="Save Config with new start timestamp, sample count = 0, and logging-start flag set. Use only after Load Config so we can preserve cal/serial/name.">Restart Logging &nbsp;<span style="color:var(--fg-3);font-weight:400">[01 LL HH]</span></button>
         <button id="btn-export" class="ghost">Export CSV</button>
         <button id="btn-clear-log" class="ghost">Clear Log</button>
+      </div>
+      <div class="actions" style="border-top:1px dashed var(--border);padding-top:8px;margin-top:6px">
+        <span style="color:var(--orange);font-size:11px;font-family:var(--mono)">⚠ DANGER zone — these wipe device metadata in current testing. Do NOT use without intent.</span>
+        <button id="btn-read-and-restart" class="ghost" title="BROKEN: corrupts device metadata — firmware does not honor the save payload as documented. Disabled until protocol is fixed.">Read &amp; Restart (BROKEN)</button>
+        <button id="btn-restart-logging" class="ghost" title="BROKEN: wipes name/interval/alarms instead of preserving them. Disabled until protocol is fixed.">Restart Logging (BROKEN)</button>
       </div>
     </div>
   </section>
@@ -1159,8 +1162,23 @@ async function atomicRead({ andRestart }) {
 }
 
 $('btn-read-sensor').addEventListener('click', () => atomicRead({ andRestart: false }));
-$('btn-read-and-restart').addEventListener('click', () => atomicRead({ andRestart: true }));
-$('btn-restart-logging').addEventListener('click', async () => {
+
+// Save Config is currently BROKEN — verified against real hardware: the
+// firmware accepts the command and ACKs with 0xff, but does not write the
+// payload faithfully. Instead, several metadata fields (name, interval,
+// alarm flags, unit, timestamp) get zeroed, and our intended changes
+// (timestamp, status bit 4, sampleCount=0) are dropped. The result is a
+// device that refuses to log (sample_interval = 0). Re-enable only after
+// the protocol's true framing is figured out.
+const RESTART_BROKEN = true;
+const restartGuard = (e) => {
+  e?.preventDefault?.();
+  log('Restart Logging is currently disabled — see DANGER zone note. ' +
+      'In testing it wipes device metadata. Use Read sensor → CSV for the data ' +
+      'and reset the device with EasyLog later.', 'error');
+};
+$('btn-read-and-restart').addEventListener('click', RESTART_BROKEN ? restartGuard : () => atomicRead({ andRestart: true }));
+$('btn-restart-logging').addEventListener('click', RESTART_BROKEN ? restartGuard : async () => {
   try { await restartLogging(); }
   catch (err) {
     log(`restartLogging failed: ${err.message}`, 'error');
