@@ -383,9 +383,11 @@
     <div class="panel-head"><span>protocol</span><span class="meta">three commands per the sigrok wiki</span></div>
     <div class="panel-body">
       <div class="actions">
-        <button id="btn-read-sensor" class="primary" title="One-click safe read: initialize → load config → download samples → export CSV. Recommended for batch reading multiple sensors.">Read sensor → CSV</button>
+        <button id="btn-read-and-restart" class="primary" title="Field workflow: initialize → load config → download samples → export CSV → restart logging. The sensor is left recording with a fresh start timestamp and sample count 0. Use this for batch field-recovery work.">Read &amp; Restart Logging → CSV</button>
+        <button id="btn-read-sensor" title="Read-only: initialize → load config → download samples → export CSV. Does NOT restart logging — use this if you only want the data and will reset on Windows EasyLog later.">Read sensor → CSV</button>
         <button id="btn-load-config">Load Config &nbsp;<span style="color:var(--fg-3);font-weight:400">[00 FF FF]</span></button>
         <button id="btn-download">Download Samples &nbsp;<span style="color:var(--fg-3);font-weight:400">[03 FF FF]</span></button>
+        <button id="btn-restart-logging" class="ghost" title="Save Config with new start timestamp, sample count = 0, and logging-start flag set. Use only after Load Config so we can preserve cal/serial/name.">Restart Logging &nbsp;<span style="color:var(--fg-3);font-weight:400">[01 LL HH]</span></button>
         <button id="btn-export" class="ghost">Export CSV</button>
         <button id="btn-clear-log" class="ghost">Clear Log</button>
       </div>
@@ -527,6 +529,8 @@ function enableConnected(connected) {
   $('btn-download').disabled = !connected || busy;
   $('btn-init').disabled = !connected || busy;
   $('btn-read-sensor').disabled = !connected || busy;
+  $('btn-read-and-restart').disabled = !connected || busy;
+  $('btn-restart-logging').disabled = !connected || busy;
   $('btn-connect').disabled = connected;
 }
 
@@ -539,6 +543,8 @@ function setBusy(b) {
   $('btn-download').disabled = !device || busy;
   $('btn-init').disabled = !device || busy;
   $('btn-read-sensor').disabled = !device || busy;
+  $('btn-read-and-restart').disabled = !device || busy;
+  $('btn-restart-logging').disabled = !device || busy;
 }
 
 // ───────────────────────────────────────────────────────────
@@ -743,15 +749,16 @@ function parseConfig(buf) {
 }
 
 function parseTimestamp(b) {
+  // Per sigrok wiki: bytes are HH MI SS DD MO YY (year is offset from 2000).
   if (b.length < 6) return null;
-  const [yy, mm, dd, hh, mi, ss] = b;
+  const [hh, mi, ss, dd, mo, yy] = b;
   const Y = 2000 + yy;
-  const valid = mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31 && hh < 24 && mi < 60 && ss < 60;
+  const valid = mo >= 1 && mo <= 12 && dd >= 1 && dd <= 31 && hh < 24 && mi < 60 && ss < 60;
   return {
     raw: Array.from(b),
     rawHex: bytesHex(b),
-    iso: valid ? `${Y}-${pad2(mm)}-${pad2(dd)} ${pad2(hh)}:${pad2(mi)}:${pad2(ss)}` : null,
-    epoch: valid ? Date.UTC(Y, mm - 1, dd, hh, mi, ss) / 1000 : null,
+    iso: valid ? `${Y}-${pad2(mo)}-${pad2(dd)} ${pad2(hh)}:${pad2(mi)}:${pad2(ss)}` : null,
+    epoch: valid ? Date.UTC(Y, mo - 1, dd, hh, mi, ss) / 1000 : null,
   };
 }
 
@@ -852,6 +859,79 @@ async function downloadSamples() {
   } catch (err) {
     log(`downloadSamples: ${err.message}`, 'error');
     setStatus('err', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ───────────────────────────────────────────────────────────
+//  Save Config / Restart Logging
+//
+//  Per sigrok wiki: command 0x01 LL HH (length LE) followed by 256 bytes
+//  payload. Device ACKs with single byte 0xFF on success. There is NO
+//  dedicated start/stop opcode — restart is done by writing a fresh
+//  config with a new start timestamp, sample count = 0, delayed start
+//  = 0, and bit 4 of byte 0x21 set (logging-start flag).
+// ───────────────────────────────────────────────────────────
+async function saveConfig(modifiedBytes) {
+  if (modifiedBytes.length !== 256) {
+    throw new Error(`saveConfig expects 256 bytes, got ${modifiedBytes.length}`);
+  }
+  if (needsCycle) { await cycleHandle(); needsCycle = false; }
+  await clearEndpoints();
+  const cmd = new Uint8Array([0x01, 0x00, 0x01]);  // 0x01 + length 256 LE
+  log(`→ TX EP${hex2(EP_OUT)}  ${bytesHex(cmd)}  (Save Config; 256-byte payload follows)`, 'cmd');
+  let r = await device.transferOut(EP_OUT, cmd);
+  if (r.status !== 'ok') throw new Error('save cmd transferOut: ' + r.status);
+  await sleep(60);
+  log(`→ TX EP${hex2(EP_OUT)}  256 bytes (modified config)`, 'cmd');
+  r = await device.transferOut(EP_OUT, modifiedBytes);
+  if (r.status !== 'ok') throw new Error('save payload transferOut: ' + r.status);
+  // Wait for single-byte 0xff ACK on EP IN.
+  const ackResp = await device.transferIn(EP_IN, 64);
+  if (ackResp.status !== 'ok') throw new Error('save ACK transferIn: ' + ackResp.status);
+  const ackBytes = new Uint8Array(ackResp.data.buffer, ackResp.data.byteOffset, ackResp.data.byteLength);
+  if (ackBytes.length === 0 || ackBytes[0] !== 0xff) {
+    throw new Error(`Save Config ACK mismatch — expected 0xff, got [${bytesHex(ackBytes)}]`);
+  }
+  log(`save ACK = 0x${hex2(ackBytes[0])}  (success)`, 'ok');
+}
+
+async function restartLogging() {
+  if (!device) { log('not connected', 'warn'); return; }
+  if (busy) { log('command in flight, wait', 'warn'); return; }
+  if (!lastConfig?.raw) {
+    log('load config first — restart needs the current config block to modify', 'warn');
+    return;
+  }
+  setBusy(true);
+  try {
+    log('── RESTART LOGGING ──', 'cmd');
+    const cfg = new Uint8Array(lastConfig.raw);  // copy
+
+    const now = new Date();
+    cfg[0x12] = now.getHours();
+    cfg[0x13] = now.getMinutes();
+    cfg[0x14] = now.getSeconds();
+    cfg[0x15] = now.getDate();
+    cfg[0x16] = now.getMonth() + 1;
+    cfg[0x17] = now.getFullYear() - 2000;
+
+    // delayedStartSec = 0 (4-byte LE u32 at 0x18)
+    cfg[0x18] = cfg[0x19] = cfg[0x1a] = cfg[0x1b] = 0;
+    // sampleCount = 0 (2-byte LE u16 at 0x1e)
+    cfg[0x1e] = cfg[0x1f] = 0;
+    // statusFlags at 0x21: set bit 4 (logging-start flag per sigrok wiki).
+    // Keep other bits intact in case they encode armed/alarm state.
+    cfg[0x21] = (cfg[0x21] | 0x10);
+
+    log(`new start = ${now.toString().slice(0, 24)} · sampleCount → 0 · status 0x${hex2(cfg[0x21])}`);
+    await saveConfig(cfg);
+    needsCycle = true;  // treat like a download — cycle handle if any further commands
+    log('✓ logging restarted · disconnect and redeploy the sensor', 'ok');
+  } catch (err) {
+    log(`restartLogging failed: ${err.message}`, 'error');
+    log('  device state may be uncertain — verify with Load Config before disconnecting', 'warn');
   } finally {
     setBusy(false);
   }
@@ -1031,13 +1111,12 @@ $('btn-init').addEventListener('click', async () => {
   }
 });
 
-$('btn-read-sensor').addEventListener('click', async () => {
-  // Atomic safe-read for batch sensor work: f32xInit (once) → loadConfig
-  // → downloadSamples → exportCsv. No double-init, no chance to misclick
-  // between steps.
+async function atomicRead({ andRestart }) {
+  // Shared atomic-read flow used by both btn-read-sensor and btn-read-and-restart.
+  // Init (once) → loadConfig → downloadSamples → exportCsv → optionally restartLogging.
   if (!device) { log('not connected', 'warn'); return; }
   if (busy) { log('command in flight, wait', 'warn'); return; }
-  log('── READ SENSOR (atomic) ──', 'cmd');
+  log(andRestart ? '── READ + RESTART (atomic) ──' : '── READ SENSOR (atomic) ──', 'cmd');
   try {
     if (!initDone) {
       setBusy(true);
@@ -1051,12 +1130,22 @@ $('btn-read-sensor').addEventListener('click', async () => {
     await downloadSamples();
     if (!lastSampleBytes) throw new Error('Download Samples did not return data');
     exportCsv();
-    log(`✓ sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · ` +
-        `${lastConfig.sampleCount} samples · CSV exported · safe to Disconnect`, 'ok');
+    const summary = `sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · ` +
+                    `${lastConfig.sampleCount} samples · CSV exported`;
+    if (andRestart) {
+      await restartLogging();
+      log(`✓ ${summary} · LOGGING RESTARTED · safe to Disconnect & redeploy`, 'ok');
+    } else {
+      log(`✓ ${summary} · safe to Disconnect`, 'ok');
+    }
   } catch (err) {
-    log(`atomic read failed: ${err.message}`, 'error');
+    log(`atomic flow failed: ${err.message}`, 'error');
   }
-});
+}
+
+$('btn-read-sensor').addEventListener('click', () => atomicRead({ andRestart: false }));
+$('btn-read-and-restart').addEventListener('click', () => atomicRead({ andRestart: true }));
+$('btn-restart-logging').addEventListener('click', restartLogging);
 $('btn-load-config').addEventListener('click', loadConfig);
 $('btn-download').addEventListener('click', downloadSamples);
 $('btn-export').addEventListener('click', exportCsv);
