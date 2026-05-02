@@ -840,13 +840,24 @@ const DECODERS = {
 // ───────────────────────────────────────────────────────────
 let baselineEditState = null;  // last loaded EditState (for diff and discard)
 
-function populateIntervalDropdown() {
+function populateIntervalDropdown(currentSec = null) {
   const sel = document.getElementById('edit-interval');
   sel.innerHTML = '';
+  const presetSeconds = new Set(SAMPLE_INTERVAL_PRESETS.map(p => p.seconds));
   for (const p of SAMPLE_INTERVAL_PRESETS) {
     const opt = document.createElement('option');
     opt.value = String(p.seconds);
     opt.textContent = `${p.label}  (${fillDurationLabel(p.seconds)})`;
+    sel.appendChild(opt);
+  }
+  // If the device's current interval isn't in our preset list, surface it
+  // as a one-off option so populateEditForm can faithfully select it. Without
+  // this, `select.value = "5"` against a list with no `5` silently leaves
+  // the select blank — and the next save reads parseInt("") → NaN → throw.
+  if (currentSec !== null && !presetSeconds.has(currentSec)) {
+    const opt = document.createElement('option');
+    opt.value = String(currentSec);
+    opt.textContent = `${currentSec} sec  (device current · non-preset)`;
     sel.appendChild(opt);
   }
 }
@@ -858,6 +869,9 @@ function populateEditForm(configBlock) {
   document.getElementById('edit-name').value = st.deviceName;
   document.getElementById('edit-name-count').textContent = `${st.deviceName.length}/16`;
   document.getElementById('edit-unit').value = st.unitIsF ? 'F' : 'C';
+  // Rebuild the dropdown so the device's current value is always selectable,
+  // even if it isn't one of the preset values.
+  populateIntervalDropdown(st.sampleIntervalSec);
   document.getElementById('edit-interval').value = String(st.sampleIntervalSec);
 
   const isImmediate = st.delayedStartSec === 0;
