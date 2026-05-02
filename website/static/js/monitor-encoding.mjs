@@ -211,11 +211,17 @@ export function applyWorkflowDeltas(payload, workflow, now) {
   }
 }
 
+// Note: delayedStartSec is intentionally NOT in the diff list. The firmware
+// appears to consume the value into an internal countdown timer and zero
+// the on-disk field after each save, so parseEditState reads back 0 even
+// though the device is still ticking. Meanwhile the form recomputes the
+// value live as (target − now), which drifts every second. Including it
+// produced a permanent fake-dirty diff post-save. The date/time inputs are
+// already visible to the user; the workflow buttons are always available.
 const DIFF_FIELDS = [
   'deviceName',
   'unitIsF',
   'sampleIntervalSec',
-  'delayedStartSec',
   'alarmHi.enabled',
   'alarmHi.value',
   'alarmLo.enabled',

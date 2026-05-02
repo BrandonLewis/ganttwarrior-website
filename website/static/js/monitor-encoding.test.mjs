@@ -367,8 +367,14 @@ test('computeDiff: multiple changes → multiple entries in stable order', () =>
     ...baseline,
     deviceName: 'X',
     sampleIntervalSec: 60,
-    delayedStartSec: 3600,
+    unitIsF: !baseline.unitIsF,
   };
   const fields = computeDiff(baseline, current).map(d => d.field);
-  assert.deepEqual(fields, ['deviceName', 'sampleIntervalSec', 'delayedStartSec']);
+  assert.deepEqual(fields, ['deviceName', 'unitIsF', 'sampleIntervalSec']);
+});
+
+test('computeDiff: delayedStartSec change is intentionally NOT diffed (firmware-mutated)', () => {
+  const baseline = parseEditState(fromHex(FIXTURE_HEX));
+  const current = { ...baseline, delayedStartSec: 9999 };
+  assert.deepEqual(computeDiff(baseline, current), []);
 });
