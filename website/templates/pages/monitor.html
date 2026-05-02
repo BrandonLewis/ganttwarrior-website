@@ -935,22 +935,29 @@ function updateWarningBar() {
 // ───────────────────────────────────────────────────────────
 //  high-level operations
 // ───────────────────────────────────────────────────────────
+// Inner: assumes the caller already owns the busy lock. Used by both the
+// button-handler `loadConfig` and `runWorkflow` (which keeps busy held
+// across save → re-load).
+async function loadConfigInner() {
+  setStatus('busy', 'loading config…');
+  log('── LOAD CONFIG ──', 'cmd');
+  await withCommandEnvelope('Load Config', async () => {
+    await sendCmd(new Uint8Array([0x00, 0xFF, 0xFF]));
+    const buf = await readFramed();
+    log(`config received · ${buf.length} bytes`, 'ok');
+    lastConfig = parseConfig(buf);
+    renderConfig(lastConfig);
+    populateEditForm(buf);
+  });
+  setStatus('on', `connected · ${lastConfig.deviceTypeName}`);
+}
+
 async function loadConfig() {
   if (!device) return;
   if (busy) { log('command already in flight — wait for it to finish or click Disconnect', 'warn'); return; }
   setBusy(true);
   try {
-    setStatus('busy', 'loading config…');
-    log('── LOAD CONFIG ──', 'cmd');
-    await withCommandEnvelope('Load Config', async () => {
-      await sendCmd(new Uint8Array([0x00, 0xFF, 0xFF]));
-      const buf = await readFramed();
-      log(`config received · ${buf.length} bytes`, 'ok');
-      lastConfig = parseConfig(buf);
-      renderConfig(lastConfig);
-      populateEditForm(buf);
-    });
-    setStatus('on', `connected · ${lastConfig.deviceTypeName}`);
+    await loadConfigInner();
   } catch (err) {
     log(`loadConfig: ${err.message}`, 'error');
     setStatus('err', 'error');
@@ -1241,11 +1248,13 @@ async function runWorkflow(label, workflow, opts = {}) {
     applyWorkflowDeltas(payload, workflow, new Date());
     await saveConfig(payload);
     log(`✓ ${label} saved · re-loading config to verify`, 'ok');
-    await loadConfig();  // re-baselines the form
+    // Use the inner so we don't trip the outer loadConfig's busy guard —
+    // we already hold busy and will release it in `finally`.
+    await loadConfigInner();
   } catch (err) {
     log(`${label} failed: ${err.message}`, 'error');
     log('  device state may be uncertain — running Load Config to surface what is actually on the device', 'warn');
-    try { await loadConfig(); } catch (e) { /* already logged */ }
+    try { await loadConfigInner(); } catch (e) { /* already logged */ }
   } finally {
     setBusy(false);
   }
