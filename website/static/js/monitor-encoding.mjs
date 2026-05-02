@@ -190,13 +190,19 @@ export function applyWorkflowDeltas(payload, workflow, now) {
       const target = new Date(now.getTime() + delaySec * 1000);
       payload.set(encodeStartTimestamp(target), 0x12);
       payload[0x1e] = 0; payload[0x1f] = 0;
-      // Hard-set 0x21 to 0x01 — not setBit(_, 0, true). EasyLog never
-      // preserves bit 1 across a host save: post-reset baseline can have
-      // bit 1 set ("session ended") which appears to block the firmware
-      // from honoring a new session if we leave it set. EasyLog's
-      // setup-and-start save in pcap reference 3 frame 422 wrote exactly
+      // Hard-set 0x21 to 0x01. EasyLog never preserves bit 1 across a
+      // host save: post-reset baseline can have bit 1 set ("session
+      // ended") which appears to block the firmware from honoring a new
+      // session if we leave it set. Reference 3 frame 422 wrote exactly
       // 0x01 from a 0x02 baseline.
       payload[0x21] = 0x01;
+      // Clear alarmFlags bits 2-7. EasyLog's reference 3 frame 422 wrote
+      // alarmFlags = 0x03 from a 0x0F baseline — bits 2/3 appear to be
+      // firmware-set "alarm fired" indicators from the previous session
+      // and the firmware may refuse to begin a new session while they're
+      // set. We keep only bits 0/1 (alarmHi/Lo enable) which buildEditedConfig
+      // already set per the form's checkboxes.
+      payload[0x20] = payload[0x20] & 0x03;
       break;
     }
     case 'stop-logging':
