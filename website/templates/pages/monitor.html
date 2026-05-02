@@ -435,6 +435,7 @@
 
       <div id="workflow-actions" hidden style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
         <button id="btn-setup-start" class="primary">Setup &amp; Start</button>
+        <button id="btn-download-resume">Download &amp; Resume</button>
         <button id="btn-stop-logging">Stop Logging</button>
         <button id="btn-discard" class="ghost" hidden>Discard changes</button>
       </div>
@@ -1258,13 +1259,52 @@ async function atomicReadOnly() {
   }
 }
 
-async function runWorkflow(label, workflow) {
+// Matches the firmware-settling pause observed in all three pcap captures
+// (cap 1: 15s, cap 2: 18.6s, cap 3: 22.5s) between the last preparation
+// op and the setup-and-start save. Without this gap the device refuses
+// to begin a new session post-download. The 20s default lands inside the
+// observed range; ticking output every 5s gives the user feedback.
+async function settlingPause(seconds) {
+  log(`  firmware settling — pausing ${seconds}s before setup save`, 'info');
+  for (let remaining = seconds; remaining > 0; remaining -= 5) {
+    if (remaining < seconds) log(`  settling… ${remaining}s remaining`, 'info');
+    await sleep(Math.min(5, remaining) * 1000);
+  }
+}
+
+async function runWorkflow(label, workflow, opts = {}) {
   if (!device) { log('not connected', 'warn'); return; }
   if (busy) { log('command in flight, wait', 'warn'); return; }
   if (!lastConfig?.raw) { log('load config first — need a baseline block', 'warn'); return; }
   log(`── ${label.toUpperCase()} ──`, 'cmd');
   setBusy(true);
   try {
+    if (opts.preDownload) {
+      // Pattern reverse-engineered from pcap reference 3 (which successfully
+      // restarts a sensor post-download without a battery pull):
+      //   Download → Load → ~20s pause → Load → Save (setup-and-start) → Load
+      // The pause is the critical ingredient that earlier attempts missed.
+      // EasyLog's wizard naturally has 15-22s of human-typing-target-time
+      // between the post-DL state and the setup save; the firmware appears
+      // to need that long to settle before it'll honor a new session save.
+      log('  step 1: download samples + CSV export', 'info');
+      await withCommandEnvelope('Download Samples', async () => {
+        await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
+        const buf = await readFramed();
+        lastSampleBytes = buf;
+        renderHexDump(buf);
+        decodeAndRender();
+      });
+      exportCsv();
+
+      log('  step 2: load config (observe post-download state)', 'info');
+      await loadConfigInner();
+
+      await settlingPause(20);
+
+      log('  step 3: load config (final pre-save read)', 'info');
+      await loadConfigInner();
+    }
     const edits = getCurrentEditState();
     const payload = buildEditedConfig(lastConfig.raw, edits);
     applyWorkflowDeltas(payload, workflow, new Date());
@@ -1290,6 +1330,8 @@ $('btn-clear-log').addEventListener('click', () => { logEl.innerHTML = ''; log('
 $('decoder').addEventListener('change', decodeAndRender);
 document.getElementById('btn-setup-start').addEventListener('click', () =>
   runWorkflow('Setup & Start', 'setup-and-start'));
+document.getElementById('btn-download-resume').addEventListener('click', () =>
+  runWorkflow('Download & Resume', 'download-and-resume', { preDownload: true }));
 document.getElementById('btn-stop-logging').addEventListener('click', () =>
   runWorkflow('Stop Logging', 'stop-logging'));
 document.getElementById('btn-discard').addEventListener('click', () => {
