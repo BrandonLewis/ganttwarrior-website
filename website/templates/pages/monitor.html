@@ -1214,12 +1214,49 @@ async function atomicReadOnly() {
   }
 }
 
+async function runWorkflow(label, workflow, opts = {}) {
+  if (!device) { log('not connected', 'warn'); return; }
+  if (busy) { log('command in flight, wait', 'warn'); return; }
+  if (!lastConfig?.raw) { log('load config first — need a baseline block', 'warn'); return; }
+  log(`── ${label.toUpperCase()} ──`, 'cmd');
+  setBusy(true);
+  try {
+    if (opts.preDownload) {
+      // Inline the relevant parts of downloadSamples — it sets busy itself,
+      // so call its core via withCommandEnvelope here.
+      log('  pre-step: download samples + CSV export', 'info');
+      await withCommandEnvelope('Download Samples', async () => {
+        await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
+        const buf = await readFramed();
+        lastSampleBytes = buf;
+        renderHexDump(buf);
+        decodeAndRender();
+      });
+      exportCsv();
+    }
+    const edits = getCurrentEditState();
+    const payload = buildEditedConfig(lastConfig.raw, edits);
+    applyWorkflowDeltas(payload, workflow, new Date());
+    await saveConfig(payload);
+    log(`✓ ${label} saved · re-loading config to verify`, 'ok');
+    await loadConfig();  // re-baselines the form
+  } catch (err) {
+    log(`${label} failed: ${err.message}`, 'error');
+    log('  device state may be uncertain — running Load Config to surface what is actually on the device', 'warn');
+    try { await loadConfig(); } catch (e) { /* already logged */ }
+  } finally {
+    setBusy(false);
+  }
+}
+
 document.getElementById('btn-read-sensor').addEventListener('click', atomicReadOnly);
 $('btn-load-config').addEventListener('click', loadConfig);
 $('btn-download').addEventListener('click', downloadSamples);
 $('btn-export').addEventListener('click', exportCsv);
 $('btn-clear-log').addEventListener('click', () => { logEl.innerHTML = ''; log('log cleared'); });
 $('decoder').addEventListener('change', decodeAndRender);
+document.getElementById('btn-setup-start').addEventListener('click', () =>
+  runWorkflow('Setup & Start', 'setup-and-start'));
 document.getElementById('btn-discard').addEventListener('click', () => {
   if (!baselineEditState || !lastConfig?.raw) return;
   populateEditForm(lastConfig.raw);
