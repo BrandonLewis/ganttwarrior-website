@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel } from './monitor-encoding.mjs';
+import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp } from './monitor-encoding.mjs';
 
 test('encodeDeviceName: short name right-padded with NUL to 16 bytes', () => {
   const out = encodeDeviceName('Sensor 111');
@@ -93,4 +93,17 @@ test('relativeTimeLabel: future is "in X..."', () => {
 
 test('relativeTimeLabel: past is empty (we never set delays in the past)', () => {
   assert.equal(relativeTimeLabel(-1), 'now');
+});
+
+test('encodeStartTimestamp: 2026-05-01 21:07:32 → [HH MI SS DD MO YY]', () => {
+  // EasyLog reference capture used a local-time wall clock.
+  const d = new Date(2026, 4, 1, 21, 7, 32);  // months are 0-indexed in JS
+  const out = encodeStartTimestamp(d);
+  assert.deepEqual(Array.from(out), [0x15, 0x07, 0x20, 0x01, 0x05, 0x1a]);
+  // Verifies HH=21=0x15, MI=7=0x07, SS=32=0x20, DD=1=0x01, MO=5=0x05, YY=26=0x1a.
+});
+
+test('encodeStartTimestamp: midnight epoch boundary', () => {
+  const d = new Date(2030, 0, 1, 0, 0, 0);
+  assert.deepEqual(Array.from(encodeStartTimestamp(d)), [0, 0, 0, 1, 1, 30]);
 });

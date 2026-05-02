@@ -66,3 +66,14 @@ export function relativeTimeLabel(deltaSec) {
   if (minutes > 0) return `in ${minutes}m`;
   return `in ${deltaSec}s`;
 }
+
+export function encodeStartTimestamp(date) {
+  return new Uint8Array([
+    date.getHours(),
+    date.getMinutes(),
+    date.getSeconds(),
+    date.getDate(),
+    date.getMonth() + 1,
+    date.getFullYear() - 2000,
+  ]);
+}
