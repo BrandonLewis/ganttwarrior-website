@@ -1257,6 +1257,8 @@ $('btn-clear-log').addEventListener('click', () => { logEl.innerHTML = ''; log('
 $('decoder').addEventListener('change', decodeAndRender);
 document.getElementById('btn-setup-start').addEventListener('click', () =>
   runWorkflow('Setup & Start', 'setup-and-start'));
+document.getElementById('btn-download-resume').addEventListener('click', () =>
+  runWorkflow('Download & Resume', 'download-and-resume', { preDownload: true }));
 document.getElementById('btn-discard').addEventListener('click', () => {
   if (!baselineEditState || !lastConfig?.raw) return;
   populateEditForm(lastConfig.raw);
