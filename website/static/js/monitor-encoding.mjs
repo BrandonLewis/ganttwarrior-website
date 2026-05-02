@@ -167,3 +167,22 @@ export function buildEditedConfig(baseline, edits) {
 
   return out;
 }
+
+export function applyWorkflowDeltas(payload, workflow, now) {
+  if (payload.length !== 256) {
+    throw new RangeError(`applyWorkflowDeltas: payload must be 256 bytes, got ${payload.length}`);
+  }
+  switch (workflow) {
+    case 'setup-and-start':
+    case 'download-and-resume':
+      payload.set(encodeStartTimestamp(now), 0x12);
+      payload[0x1e] = 0; payload[0x1f] = 0;
+      payload[0x21] = setBit(payload[0x21], 0, true);
+      break;
+    case 'stop-logging':
+      payload[0x21] = setBit(payload[0x21], 0, false);
+      break;
+    default:
+      throw new Error(`applyWorkflowDeltas: unknown workflow ${workflow}`);
+  }
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat, setBit, parseEditState, buildEditedConfig } from './monitor-encoding.mjs';
+import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat, setBit, parseEditState, buildEditedConfig, applyWorkflowDeltas } from './monitor-encoding.mjs';
 
 test('encodeDeviceName: short name right-padded with NUL to 16 bytes', () => {
   const out = encodeDeviceName('Sensor 111');
@@ -226,4 +226,47 @@ test('buildEditedConfig: disabling an alarm leaves threshold bytes intact', () =
   assert.equal(out[0x20] & 0x01, 0);                                     // flag cleared
   assert.deepEqual(Array.from(out.slice(0x70, 0x78)),                    // bytes preserved
                    Array.from(baseline.slice(0x70, 0x78)));
+});
+
+test("applyWorkflowDeltas: 'setup-and-start' zeroes sampleCount, sets timestamp, sets statusFlags bit 0", () => {
+  const baseline = fromHex(FIXTURE_HEX);
+  const edits = parseEditState(baseline);
+  const payload = buildEditedConfig(baseline, edits);
+  const now = new Date(2026, 5, 15, 14, 30, 5);  // 2026-06-15 14:30:05
+  applyWorkflowDeltas(payload, 'setup-and-start', now);
+  // sampleCount → 0
+  assert.equal(payload[0x1e], 0);
+  assert.equal(payload[0x1f], 0);
+  // startTimestamp → now
+  assert.deepEqual(Array.from(payload.slice(0x12, 0x18)), [14, 30, 5, 15, 6, 26]);
+  // statusFlags bit 0 set
+  assert.equal(payload[0x21] & 0x01, 0x01);
+});
+
+test("applyWorkflowDeltas: 'download-and-resume' is identical to setup-and-start", () => {
+  const baseline = fromHex(FIXTURE_HEX);
+  const a = buildEditedConfig(baseline, parseEditState(baseline));
+  const b = buildEditedConfig(baseline, parseEditState(baseline));
+  const now = new Date(2026, 0, 1, 0, 0, 0);
+  applyWorkflowDeltas(a, 'setup-and-start', now);
+  applyWorkflowDeltas(b, 'download-and-resume', now);
+  assert.deepEqual(Array.from(a), Array.from(b));
+});
+
+test("applyWorkflowDeltas: 'stop-logging' clears bit 0 of 0x21 and leaves sampleCount/timestamp alone", () => {
+  const baseline = fromHex(FIXTURE_HEX);
+  const payload = buildEditedConfig(baseline, parseEditState(baseline));
+  const now = new Date(2026, 5, 15, 14, 30, 5);
+  applyWorkflowDeltas(payload, 'stop-logging', now);
+  assert.equal(payload[0x21] & 0x01, 0);
+  // sampleCount unchanged from baseline (0x01be = 446)
+  assert.equal(payload[0x1e], baseline[0x1e]);
+  assert.equal(payload[0x1f], baseline[0x1f]);
+  // startTimestamp unchanged
+  assert.deepEqual(Array.from(payload.slice(0x12, 0x18)), Array.from(baseline.slice(0x12, 0x18)));
+});
+
+test("applyWorkflowDeltas: unknown workflow throws", () => {
+  const payload = new Uint8Array(256);
+  assert.throws(() => applyWorkflowDeltas(payload, 'bogus', new Date()));
 });
