@@ -886,6 +886,56 @@ function populateEditForm(configBlock) {
   }
 }
 
+function getCurrentEditState() {
+  const delayMode = document.querySelector('input[name="edit-delay-mode"]:checked')?.value;
+  let delayedStartSec = 0;
+  if (delayMode === 'delayed') {
+    const date = document.getElementById('edit-delay-date').value;       // "2026-05-04"
+    const time = document.getElementById('edit-delay-time').value;       // "08:00:00"
+    const ampm = document.getElementById('edit-delay-ampm').value;       // "AM" | "PM"
+    if (date && time) {
+      const [h, m, s] = time.split(':').map(Number);
+      const hour24 = ampm === 'PM' ? (h % 12) + 12 : (h % 12);
+      const target = new Date(`${date}T${String(hour24).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s||0).padStart(2,'0')}`);
+      delayedStartSec = Math.max(0, Math.floor((target.getTime() - Date.now()) / 1000));
+    }
+  }
+  return {
+    deviceName: document.getElementById('edit-name').value,
+    unitIsF: document.getElementById('edit-unit').value === 'F',
+    sampleIntervalSec: parseInt(document.getElementById('edit-interval').value, 10),
+    delayedStartSec,
+    alarmHi: {
+      enabled: document.getElementById('edit-alarm-hi-on').checked,
+      value: parseFloat(document.getElementById('edit-alarm-hi-value').value) || 0,
+    },
+    alarmLo: {
+      enabled: document.getElementById('edit-alarm-lo-on').checked,
+      value: parseFloat(document.getElementById('edit-alarm-lo-value').value) || 0,
+    },
+  };
+}
+
+function updateWarningBar() {
+  if (!baselineEditState) {
+    document.getElementById('edit-warning').hidden = true;
+    document.getElementById('edit-delay-hint').textContent = '';
+    return;
+  }
+  const current = getCurrentEditState();
+  const diff = computeDiff(baselineEditState, current);
+  // Always update the delayed-start hint, even when nothing is dirty.
+  document.getElementById('edit-delay-hint').textContent =
+    current.delayedStartSec > 0 ? relativeTimeLabel(current.delayedStartSec) : '';
+  const bar = document.getElementById('edit-warning');
+  if (diff.length === 0) { bar.hidden = true; return; }
+  bar.hidden = false;
+  document.getElementById('edit-change-count').textContent =
+    `${diff.length} field${diff.length === 1 ? '' : 's'} modified`;
+  document.getElementById('edit-diff-text').textContent =
+    diff.map(d => `${d.field}: ${d.before} → ${d.after}`).join(' · ');
+}
+
 // ───────────────────────────────────────────────────────────
 //  high-level operations
 // ───────────────────────────────────────────────────────────
@@ -1233,6 +1283,30 @@ if (!navigator.usb) {
   $('webusb-warning').hidden = false;
 }
 populateIntervalDropdown();
+const EDIT_INPUT_IDS = [
+  'edit-name', 'edit-unit', 'edit-interval',
+  'edit-delay-date', 'edit-delay-time', 'edit-delay-ampm',
+  'edit-alarm-hi-on', 'edit-alarm-hi-value',
+  'edit-alarm-lo-on', 'edit-alarm-lo-value',
+];
+for (const id of EDIT_INPUT_IDS) {
+  document.getElementById(id).addEventListener('input', updateWarningBar);
+  document.getElementById(id).addEventListener('change', updateWarningBar);
+}
+for (const r of document.querySelectorAll('input[name="edit-delay-mode"]')) {
+  r.addEventListener('change', () => {
+    const delayed = document.querySelector('input[name="edit-delay-mode"]:checked').value === 'delayed';
+    document.getElementById('edit-delay-fields').hidden = !delayed;
+    for (const id of ['edit-delay-date', 'edit-delay-time', 'edit-delay-ampm']) {
+      document.getElementById(id).disabled = !delayed;
+    }
+    updateWarningBar();
+  });
+}
+document.getElementById('edit-name').addEventListener('input', () => {
+  const len = document.getElementById('edit-name').value.length;
+  document.getElementById('edit-name-count').textContent = `${len}/16`;
+});
 enableConnected(false);
 setStatus('', 'disconnected');
 log('ready · plug in EL-USB-TC and click Connect', 'info');
