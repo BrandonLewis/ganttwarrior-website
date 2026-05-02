@@ -145,19 +145,15 @@ export function buildEditedConfig(baseline, edits) {
   out.set(encodeUint32LE(edits.delayedStartSec), 0x18);
 
   // alarm thresholds → 0x70-0x77 (hi), 0x78-0x7F (lo).
-  // Only write threshold bytes when the corresponding alarm is enabled AND a
-  // non-zero value is present. Zero is the sentinel for "no value set" (it is
-  // also what parseEditState returns when the baseline threshold bytes are
-  // NUL-padded garbage). Skipping the write in those cases preserves the
-  // round-trip identity (encodeAsciiFloat(0) would write '0\0\0\0\0\0\0\0',
-  // not 0x00) and matches the spec semantic that we never write a value the
-  // user hasn't actually entered.
-  if (edits.alarmHi.enabled && edits.alarmHi.value !== 0) {
-    out.set(encodeAsciiFloat(edits.alarmHi.value), 0x70);
-  }
-  if (edits.alarmLo.enabled && edits.alarmLo.value !== 0) {
-    out.set(encodeAsciiFloat(edits.alarmLo.value), 0x78);
-  }
+  // When an alarm is enabled, always write a canonical ASCII representation
+  // of its value to the threshold offset. We used to skip the write when the
+  // value was 0, but that left whatever stale bytes happened to be in flash
+  // at 0x70 / 0x78 as the live threshold even though the form showed "0".
+  // Writing unconditionally on enable means enabling an alarm at 0 produces
+  // a deterministic '0\0\0\0\0\0\0\0' on the wire, matching what the user
+  // sees in the form. Disabled alarms still leave the bytes untouched.
+  if (edits.alarmHi.enabled) out.set(encodeAsciiFloat(edits.alarmHi.value), 0x70);
+  if (edits.alarmLo.enabled) out.set(encodeAsciiFloat(edits.alarmLo.value), 0x78);
 
   // alarmFlags → bits 0 (hi) and 1 (lo); preserve others
   let flags = out[0x20];

@@ -179,12 +179,26 @@ test('parseEditState: alarmFlags bits become alarm.enabled', () => {
   assert.equal(st.alarmLo.enabled, true);
 });
 
-test('buildEditedConfig: returns a 256-byte copy that preserves baseline bytes outside edited offsets', () => {
+test('buildEditedConfig: returns a 256-byte copy that preserves baseline bytes outside edited and threshold offsets', () => {
   const baseline = fromHex(FIXTURE_HEX);
-  const edits = parseEditState(baseline);  // identity edit
+  const edits = parseEditState(baseline);
   const out = buildEditedConfig(baseline, edits);
   assert.equal(out.length, 256);
-  assert.deepEqual(Array.from(out), Array.from(baseline));
+  // Identity over everything except the alarm-threshold regions, which get
+  // canonicalized when alarmFlags bits 0/1 are set in the baseline.
+  assert.deepEqual(Array.from(out.slice(0, 0x70)),    Array.from(baseline.slice(0, 0x70)));
+  assert.deepEqual(Array.from(out.slice(0x80)),       Array.from(baseline.slice(0x80)));
+});
+
+test('buildEditedConfig: enabling an alarm at value 0 writes canonical "0" bytes at the threshold offset', () => {
+  const baseline = fromHex(FIXTURE_HEX);
+  baseline[0x20] = 0x00;  // start with both alarms disabled
+  const edits = parseEditState(baseline);
+  edits.alarmHi.enabled = true;
+  edits.alarmHi.value = 0;
+  const out = buildEditedConfig(baseline, edits);
+  assert.equal(out[0x70], 0x30);                                // ASCII '0'
+  assert.deepEqual(Array.from(out.slice(0x71, 0x78)), [0,0,0,0,0,0,0]);
 });
 
 test('buildEditedConfig: changing the device name only touches 0x02-0x11', () => {
@@ -194,8 +208,11 @@ test('buildEditedConfig: changing the device name only touches 0x02-0x11', () =>
   const out = buildEditedConfig(baseline, edits);
   const newName = new TextDecoder('latin1').decode(out.slice(0x02, 0x12)).replace(/\0+$/, '');
   assert.equal(newName, 'Walk-in cooler');
-  assert.deepEqual(Array.from(out.slice(0, 0x02)), Array.from(baseline.slice(0, 0x02)));
-  assert.deepEqual(Array.from(out.slice(0x12)),    Array.from(baseline.slice(0x12)));
+  assert.deepEqual(Array.from(out.slice(0, 0x02)),    Array.from(baseline.slice(0, 0x02)));
+  // Skip 0x70-0x7F (threshold canonicalization fires when alarmFlags bits 0/1
+  // are set in the baseline); we only care that the name edit is localized.
+  assert.deepEqual(Array.from(out.slice(0x12, 0x70)), Array.from(baseline.slice(0x12, 0x70)));
+  assert.deepEqual(Array.from(out.slice(0x80)),       Array.from(baseline.slice(0x80)));
 });
 
 test('buildEditedConfig: unit toggle flips bit 0 of 0x2E and preserves other bits', () => {
