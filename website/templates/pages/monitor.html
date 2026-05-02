@@ -1278,6 +1278,14 @@ async function runWorkflow(label, workflow, opts = {}) {
         decodeAndRender();
       });
       exportCsv();
+      // Re-Load Config so the post-download transient state (0x21=0x00) is
+      // observable and our save payload is built from the FRESH bytes the
+      // device has now, not the stale pre-download config. EasyLog's
+      // capture 3 frames 358-431 do the same: Download → Load → Save → Load
+      // → Save. Without this Load the device gets stuck post-download and
+      // won't begin a new session, requiring a battery pull to recover.
+      log('  pre-step: re-load config to settle post-download state', 'info');
+      await loadConfigInner();
     }
     const edits = getCurrentEditState();
     const payload = buildEditedConfig(lastConfig.raw, edits);
