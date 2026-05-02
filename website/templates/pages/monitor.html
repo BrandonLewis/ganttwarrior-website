@@ -429,15 +429,16 @@
         <div class="k">alarm flags / status flags</div><div class="v" id="ro-flags"><span class="dim">·</span></div>
       </div>
 
-      <div id="edit-warning" class="warning-bar" hidden style="margin-top:14px;padding:10px;background:#2a1a0a;border:1px solid #6a4a1a;border-radius:4px;color:#f0a050">
+      <div id="edit-warning" hidden style="margin-top:14px;padding:10px;background:#2a1a0a;border:1px solid #6a4a1a;border-radius:4px;color:#f0a050">
         ⚠ <strong><span id="edit-change-count">0 fields modified</span></strong> — writes to flash<br>
         <span id="edit-diff-text" style="font-size:11px;color:#caa080"></span>
-        <div style="margin-top:6px">
-          <button id="btn-setup-start">Setup &amp; Start</button>
-          <button id="btn-download-resume">Download &amp; Resume</button>
-          <button id="btn-stop-logging">Stop Logging</button>
-          <button id="btn-discard" class="ghost">Discard changes</button>
-        </div>
+      </div>
+
+      <div id="workflow-actions" hidden style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="btn-setup-start" class="primary">Setup &amp; Start</button>
+        <button id="btn-download-resume">Download &amp; Resume</button>
+        <button id="btn-stop-logging">Stop Logging</button>
+        <button id="btn-discard" class="ghost" hidden>Discard changes</button>
       </div>
     </div>
   </section>
@@ -894,6 +895,9 @@ function populateEditForm(configBlock) {
   for (const id of ['edit-delay-date', 'edit-delay-time', 'edit-delay-ampm']) {
     document.getElementById(id).disabled = isImmediate;
   }
+
+  // Workflow actions are always available once a config baseline exists.
+  document.getElementById('workflow-actions').hidden = false;
 }
 
 function getCurrentEditState() {
@@ -927,8 +931,11 @@ function getCurrentEditState() {
 }
 
 function updateWarningBar() {
+  const bar = document.getElementById('edit-warning');
+  const discard = document.getElementById('btn-discard');
   if (!baselineEditState) {
-    document.getElementById('edit-warning').hidden = true;
+    bar.hidden = true;
+    discard.hidden = true;
     document.getElementById('edit-delay-hint').textContent = '';
     return;
   }
@@ -937,9 +944,13 @@ function updateWarningBar() {
   // Always update the delayed-start hint, even when nothing is dirty.
   document.getElementById('edit-delay-hint').textContent =
     current.delayedStartSec > 0 ? relativeTimeLabel(current.delayedStartSec) : '';
-  const bar = document.getElementById('edit-warning');
-  if (diff.length === 0) { bar.hidden = true; return; }
+  if (diff.length === 0) {
+    bar.hidden = true;
+    discard.hidden = true;
+    return;
+  }
   bar.hidden = false;
+  discard.hidden = false;
   document.getElementById('edit-change-count').textContent =
     `${diff.length} field${diff.length === 1 ? '' : 's'} modified`;
   document.getElementById('edit-diff-text').textContent =
@@ -1328,6 +1339,25 @@ for (const r of document.querySelectorAll('input[name="edit-delay-mode"]')) {
     document.getElementById('edit-delay-fields').hidden = !delayed;
     for (const id of ['edit-delay-date', 'edit-delay-time', 'edit-delay-ampm']) {
       document.getElementById(id).disabled = !delayed;
+    }
+    // First time switching to Delayed in this session: pre-populate the
+    // date/time inputs with "now + 5 min" so the form is in a valid,
+    // savable state immediately.
+    if (delayed) {
+      const dateEl = document.getElementById('edit-delay-date');
+      const timeEl = document.getElementById('edit-delay-time');
+      const ampmEl = document.getElementById('edit-delay-ampm');
+      if (!dateEl.value || !timeEl.value) {
+        const t = new Date(Date.now() + 5 * 60 * 1000);
+        const yyyy = t.getFullYear();
+        const mm = String(t.getMonth() + 1).padStart(2, '0');
+        const dd = String(t.getDate()).padStart(2, '0');
+        const h24 = t.getHours();
+        const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+        dateEl.value = `${yyyy}-${mm}-${dd}`;
+        timeEl.value = `${String(h12).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+        ampmEl.value = h24 >= 12 ? 'PM' : 'AM';
+      }
     }
     updateWarningBar();
   });
