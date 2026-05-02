@@ -1090,9 +1090,22 @@ function renderConfig(c) {
   const startTsHtml = c.startTimestamp?.iso
     ? `${accent(c.startTimestamp.iso)} <span class="raw">(raw ${c.startTimestamp.rawHex})</span>`
     : `<span class="dim">·</span> <span class="raw">(raw ${c.startTimestamp?.rawHex ?? ''})</span>`;
+  // Empirical state map for byte 0x21 (across the three pcap references and
+  // user testing). Subject to revision as we observe more states:
+  //   0x00 → transient (post-Download)
+  //   0x01 → logging
+  //   0x02 → session ended / stopped
+  //   0x03 → armed, delayed-start countdown running
+  const sf = c.statusFlags ?? 0;
+  const stateLabel =
+    sf === 0x00 ? 'transient' :
+    sf === 0x01 ? 'logging' :
+    sf === 0x02 ? 'ended' :
+    sf === 0x03 ? 'armed' :
+    `unknown 0x${hex2(sf)}`;
   const flagsHtml =
-    `<span class="raw">alarm 0x${hex2(c.alarmFlags ?? 0)} / status 0x${hex2(c.statusFlags ?? 0)}</span>` +
-    ` · logging=${(c.statusFlags & 0x01) ? 'on' : 'off'}`;
+    `<span class="raw">alarm 0x${hex2(c.alarmFlags ?? 0)} / status 0x${hex2(sf)}</span>` +
+    ` · ${stateLabel}`;
 
   $('ro-device-type').innerHTML  = `${accent(c.deviceType)} · ${c.deviceTypeName}`;
   $('ro-serial').innerHTML       = accent(fmt(c.serialNumber));
