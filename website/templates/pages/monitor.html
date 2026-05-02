@@ -1072,31 +1072,33 @@ function decodeAndRender() {
 //  rendering
 // ───────────────────────────────────────────────────────────
 function renderConfig(c) {
+  // Update only the read-only `ro-*` cells; the editable inputs are siblings
+  // in the same #config-kv grid and must be left alone (overwriting
+  // #config-kv's innerHTML would destroy them and break populateEditForm).
   const fmt = (v, suffix = '') => {
     if (v === null || v === undefined || v === '') return '<span class="dim">·</span>';
     return String(v) + suffix;
   };
   const accent = (v) => `<span class="accent">${v}</span>`;
+  const startTsHtml = c.startTimestamp?.iso
+    ? `${accent(c.startTimestamp.iso)} <span class="raw">(raw ${c.startTimestamp.rawHex})</span>`
+    : `<span class="dim">·</span> <span class="raw">(raw ${c.startTimestamp?.rawHex ?? ''})</span>`;
+  const flagsHtml =
+    `<span class="raw">alarm 0x${hex2(c.alarmFlags ?? 0)} / status 0x${hex2(c.statusFlags ?? 0)}</span>` +
+    ` · logging=${(c.statusFlags & 0x01) ? 'on' : 'off'}`;
 
-  const html = [
-    ['device type',        `${accent(c.deviceType)} · ${c.deviceTypeName}`],
-    ['device name',        fmt(c.deviceName)],
-    ['serial number',      accent(fmt(c.serialNumber))],
-    ['firmware',           fmt(c.firmware)],
-    ['unit',               accent('°' + c.unit)],
-    ['sample interval',    `${accent(c.sampleIntervalSec)} <span class="dim">sec</span>`],
-    ['sample count',       `${accent(c.sampleCount)} <span class="dim">/ 32510 max</span>`],
-    ['start timestamp',    c.startTimestamp?.iso
-      ? `${accent(c.startTimestamp.iso)} <span class="raw">(raw ${c.startTimestamp.rawHex})</span>`
-      : `<span class="dim">·</span> <span class="raw">(raw ${c.startTimestamp?.rawHex ?? ''})</span>`],
-    ['delayed start',      `${fmt(c.delayedStartSec, ' sec')}`],
-    ['alarm flags',        `<span class="raw">0x${hex2(c.alarmFlags ?? 0)}</span>`],
-    ['status flags',       `<span class="raw">0x${hex2(c.statusFlags ?? 0)}</span> · logging=${(c.statusFlags & 0x01) ? 'on' : 'off'}`],
-    ['temp alarm hi/lo',   `${c.tempAlarmHi ?? '?'} / ${c.tempAlarmLo ?? '?'} °${c.unit}`],
-    ['cal1 / cal2 (f32)',  `${(c.cal1 ?? 0).toExponential(3)} / ${(c.cal2 ?? 0).toFixed(6)}`],
-  ].map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
+  $('ro-device-type').innerHTML  = `${accent(c.deviceType)} · ${c.deviceTypeName}`;
+  $('ro-serial').innerHTML       = accent(fmt(c.serialNumber));
+  $('ro-firmware').innerHTML     = fmt(c.firmware);
+  $('ro-sample-count').innerHTML = `${accent(c.sampleCount)} <span class="dim">/ 32510 max</span>`;
+  $('ro-start-ts').innerHTML     = startTsHtml;
+  $('ro-cal').innerHTML          = `${(c.cal1 ?? 0).toExponential(3)} / ${(c.cal2 ?? 0).toFixed(6)}`;
+  $('ro-flags').innerHTML        = flagsHtml;
 
-  $('config-kv').innerHTML = html;
+  // Match the °F / °C suffix on the editable alarm-hi/lo rows to the device.
+  $('edit-alarm-hi-unit').textContent = '°' + c.unit;
+  $('edit-alarm-lo-unit').textContent = '°' + c.unit;
+
   $('cfg-meta').textContent = `${c.rawLen} byte struct · type ${c.deviceType}`;
 }
 
