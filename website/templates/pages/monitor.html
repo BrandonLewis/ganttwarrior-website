@@ -413,7 +413,6 @@
           <div id="edit-delay-fields" style="margin-top:6px;margin-left:18px" hidden>
             <input id="edit-delay-date" type="date" disabled>
             <input id="edit-delay-time" type="time" step="1" disabled>
-            <select id="edit-delay-ampm" disabled><option>AM</option><option>PM</option></select>
             <span id="edit-delay-hint" class="dim" style="margin-left:8px"></span>
           </div>
         </div>
@@ -892,7 +891,7 @@ function populateEditForm(configBlock) {
     document.getElementById(id).disabled = false;
   }
   for (const r of document.querySelectorAll('input[name="edit-delay-mode"]')) r.disabled = false;
-  for (const id of ['edit-delay-date', 'edit-delay-time', 'edit-delay-ampm']) {
+  for (const id of ['edit-delay-date', 'edit-delay-time']) {
     document.getElementById(id).disabled = isImmediate;
   }
 
@@ -904,13 +903,10 @@ function getCurrentEditState() {
   const delayMode = document.querySelector('input[name="edit-delay-mode"]:checked')?.value;
   let delayedStartSec = 0;
   if (delayMode === 'delayed') {
-    const date = document.getElementById('edit-delay-date').value;       // "2026-05-04"
-    const time = document.getElementById('edit-delay-time').value;       // "08:00:00"
-    const ampm = document.getElementById('edit-delay-ampm').value;       // "AM" | "PM"
+    const date = document.getElementById('edit-delay-date').value;  // "2026-05-04"
+    const time = document.getElementById('edit-delay-time').value;  // "08:00:00" (always 24h)
     if (date && time) {
-      const [h, m, s] = time.split(':').map(Number);
-      const hour24 = ampm === 'PM' ? (h % 12) + 12 : (h % 12);
-      const target = new Date(`${date}T${String(hour24).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s||0).padStart(2,'0')}`);
+      const target = new Date(`${date}T${time.length === 5 ? time + ':00' : time}`);
       delayedStartSec = Math.max(0, Math.floor((target.getTime() - Date.now()) / 1000));
     }
   }
@@ -1325,7 +1321,7 @@ if (!navigator.usb) {
 populateIntervalDropdown();
 const EDIT_INPUT_IDS = [
   'edit-name', 'edit-unit', 'edit-interval',
-  'edit-delay-date', 'edit-delay-time', 'edit-delay-ampm',
+  'edit-delay-date', 'edit-delay-time',
   'edit-alarm-hi-on', 'edit-alarm-hi-value',
   'edit-alarm-lo-on', 'edit-alarm-lo-value',
 ];
@@ -1337,7 +1333,7 @@ for (const r of document.querySelectorAll('input[name="edit-delay-mode"]')) {
   r.addEventListener('change', () => {
     const delayed = document.querySelector('input[name="edit-delay-mode"]:checked').value === 'delayed';
     document.getElementById('edit-delay-fields').hidden = !delayed;
-    for (const id of ['edit-delay-date', 'edit-delay-time', 'edit-delay-ampm']) {
+    for (const id of ['edit-delay-date', 'edit-delay-time']) {
       document.getElementById(id).disabled = !delayed;
     }
     // First time switching to Delayed in this session: pre-populate the
@@ -1346,17 +1342,13 @@ for (const r of document.querySelectorAll('input[name="edit-delay-mode"]')) {
     if (delayed) {
       const dateEl = document.getElementById('edit-delay-date');
       const timeEl = document.getElementById('edit-delay-time');
-      const ampmEl = document.getElementById('edit-delay-ampm');
       if (!dateEl.value || !timeEl.value) {
         const t = new Date(Date.now() + 5 * 60 * 1000);
         const yyyy = t.getFullYear();
         const mm = String(t.getMonth() + 1).padStart(2, '0');
         const dd = String(t.getDate()).padStart(2, '0');
-        const h24 = t.getHours();
-        const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
         dateEl.value = `${yyyy}-${mm}-${dd}`;
-        timeEl.value = `${String(h12).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
-        ampmEl.value = h24 >= 12 ? 'PM' : 'AM';
+        timeEl.value = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
       }
     }
     updateWarningBar();
