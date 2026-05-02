@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat } from './monitor-encoding.mjs';
+import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat, setBit } from './monitor-encoding.mjs';
 
 test('encodeDeviceName: short name right-padded with NUL to 16 bytes', () => {
   const out = encodeDeviceName('Sensor 111');
@@ -129,4 +129,22 @@ test('encodeAsciiFloat: negative value', () => {
 
 test('encodeAsciiFloat: throws if formatted value exceeds 8 bytes', () => {
   assert.throws(() => encodeAsciiFloat(123456.789));
+});
+
+test('setBit: set a clear bit', () => {
+  assert.equal(setBit(0x00, 0, true), 0x01);
+  assert.equal(setBit(0x00, 4, true), 0x10);
+  assert.equal(setBit(0x21, 0, true), 0x21);  // already set, no change
+  assert.equal(setBit(0x20, 0, true), 0x21);
+});
+
+test('setBit: clear a set bit', () => {
+  assert.equal(setBit(0x21, 0, false), 0x20);
+  assert.equal(setBit(0xff, 7, false), 0x7f);
+  assert.equal(setBit(0x20, 0, false), 0x20);  // already clear, no change
+});
+
+test('setBit: rejects invalid index', () => {
+  assert.throws(() => setBit(0, -1, true));
+  assert.throws(() => setBit(0, 8, true));
 });

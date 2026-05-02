@@ -91,3 +91,11 @@ export function encodeAsciiFloat(value) {
   for (let i = 0; i < str.length; i++) out[i] = str.charCodeAt(i);
   return out;
 }
+
+export function setBit(byte, index, on) {
+  if (!Number.isInteger(index) || index < 0 || index > 7) {
+    throw new RangeError(`setBit: index ${index} out of [0, 7]`);
+  }
+  const mask = 1 << index;
+  return on ? (byte | mask) & 0xff : (byte & ~mask) & 0xff;
+}
