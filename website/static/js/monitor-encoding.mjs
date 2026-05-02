@@ -77,3 +77,17 @@ export function encodeStartTimestamp(date) {
     date.getFullYear() - 2000,
   ]);
 }
+
+export function encodeAsciiFloat(value) {
+  // The EL-USB-TC stores alarm thresholds as ASCII floats in 8-byte fields,
+  // right-padded with NUL. The exact format EasyLog writes is unverified
+  // (the reference capture had no alarms set) — we trim trailing zeros to
+  // keep things compact and let the firmware parse a standard decimal.
+  const str = String(value);
+  if (str.length > 8) {
+    throw new RangeError(`encodeAsciiFloat: "${str}" exceeds 8 bytes`);
+  }
+  const out = new Uint8Array(8);
+  for (let i = 0; i < str.length; i++) out[i] = str.charCodeAt(i);
+  return out;
+}

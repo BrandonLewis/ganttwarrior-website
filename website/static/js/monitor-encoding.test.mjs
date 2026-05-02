@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp } from './monitor-encoding.mjs';
+import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat } from './monitor-encoding.mjs';
 
 test('encodeDeviceName: short name right-padded with NUL to 16 bytes', () => {
   const out = encodeDeviceName('Sensor 111');
@@ -106,4 +106,27 @@ test('encodeStartTimestamp: 2026-05-01 21:07:32 → [HH MI SS DD MO YY]', () => 
 test('encodeStartTimestamp: midnight epoch boundary', () => {
   const d = new Date(2030, 0, 1, 0, 0, 0);
   assert.deepEqual(Array.from(encodeStartTimestamp(d)), [0, 0, 0, 1, 1, 30]);
+});
+
+test('encodeAsciiFloat: integer value formats compactly, NUL-padded to 8 bytes', () => {
+  const out = encodeAsciiFloat(42);
+  assert.equal(out.length, 8);
+  assert.equal(String.fromCharCode(...out.slice(0, 2)), '42');
+  assert.deepEqual(Array.from(out.slice(2)), [0, 0, 0, 0, 0, 0]);
+});
+
+test('encodeAsciiFloat: fractional value', () => {
+  const out = encodeAsciiFloat(36.5);
+  const ascii = String.fromCharCode(...out).replace(/\0+$/, '');
+  assert.equal(ascii, '36.5');
+});
+
+test('encodeAsciiFloat: negative value', () => {
+  const out = encodeAsciiFloat(-12.3);
+  const ascii = String.fromCharCode(...out).replace(/\0+$/, '');
+  assert.equal(ascii, '-12.3');
+});
+
+test('encodeAsciiFloat: throws if formatted value exceeds 8 bytes', () => {
+  assert.throws(() => encodeAsciiFloat(123456.789));
 });
