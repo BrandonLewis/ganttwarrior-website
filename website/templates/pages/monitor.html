@@ -1104,18 +1104,20 @@ function renderConfig(c) {
   const startTsHtml = c.startTimestamp?.iso
     ? `${accent(c.startTimestamp.iso)} <span class="raw">(raw ${c.startTimestamp.rawHex})</span>`
     : `<span class="dim">·</span> <span class="raw">(raw ${c.startTimestamp?.rawHex ?? ''})</span>`;
-  // Empirical state map for byte 0x21 (across the three pcap references and
-  // user testing). Subject to revision as we observe more states:
+  // Empirical state map for byte 0x21. Bit 0 is host-set ("armed"); bit 1
+  // is sensor-set ("recording"). The host writes 0x01 in setup-and-start;
+  // the sensor flips bit 1 once it actually begins recording, so 0x03 ==
+  // armed + recording.
   //   0x00 → transient (post-Download)
-  //   0x01 → logging
-  //   0x02 → session ended / stopped
-  //   0x03 → armed, delayed-start countdown running
+  //   0x01 → armed (host wrote it; if delayed, waiting for start time)
+  //   0x02 → idle (post-reset / session ended; not armed)
+  //   0x03 → logging (armed + sensor actively recording)
   const sf = c.statusFlags ?? 0;
   const stateLabel =
     sf === 0x00 ? 'transient' :
-    sf === 0x01 ? 'logging' :
-    sf === 0x02 ? 'ended' :
-    sf === 0x03 ? 'armed' :
+    sf === 0x01 ? 'armed' :
+    sf === 0x02 ? 'idle' :
+    sf === 0x03 ? 'logging' :
     `unknown 0x${hex2(sf)}`;
   const flagsHtml =
     `<span class="raw">alarm 0x${hex2(c.alarmFlags ?? 0)} / status 0x${hex2(sf)}</span>` +
