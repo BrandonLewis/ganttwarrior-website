@@ -108,6 +108,11 @@ test('encodeStartTimestamp: midnight epoch boundary', () => {
   assert.deepEqual(Array.from(encodeStartTimestamp(d)), [0, 0, 0, 1, 1, 30]);
 });
 
+test('encodeStartTimestamp: rejects out-of-range years', () => {
+  assert.throws(() => encodeStartTimestamp(new Date(1999, 0, 1)));
+  assert.throws(() => encodeStartTimestamp(new Date(2100, 0, 1)));
+});
+
 test('encodeAsciiFloat: integer value formats compactly, NUL-padded to 8 bytes', () => {
   const out = encodeAsciiFloat(42);
   assert.equal(out.length, 8);

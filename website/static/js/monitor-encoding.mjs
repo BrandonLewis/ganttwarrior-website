@@ -68,13 +68,17 @@ export function relativeTimeLabel(deltaSec) {
 }
 
 export function encodeStartTimestamp(date) {
+  const year = date.getFullYear();
+  if (year < 2000 || year > 2099) {
+    throw new RangeError(`encodeStartTimestamp: year must be in [2000, 2099], got ${year}`);
+  }
   return new Uint8Array([
     date.getHours(),
     date.getMinutes(),
     date.getSeconds(),
     date.getDate(),
     date.getMonth() + 1,
-    date.getFullYear() - 2000,
+    year - 2000,
   ]);
 }
 
