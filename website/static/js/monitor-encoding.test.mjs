@@ -263,7 +263,8 @@ test('buildEditedConfig: disabling an alarm leaves threshold bytes intact', () =
                    Array.from(baseline.slice(0x70, 0x78)));
 });
 
-test("applyWorkflowDeltas: 'setup-and-start' zeroes sampleCount, sets timestamp, sets statusFlags bit 0", () => {
+test("applyWorkflowDeltas: 'setup-and-start' with immediate start writes startTimestamp = now", () => {
+  // Fixture has delayedStartSec = 0 (immediate), so target == now.
   const baseline = fromHex(FIXTURE_HEX);
   const edits = parseEditState(baseline);
   const payload = buildEditedConfig(baseline, edits);
@@ -275,6 +276,22 @@ test("applyWorkflowDeltas: 'setup-and-start' zeroes sampleCount, sets timestamp,
   // startTimestamp → now
   assert.deepEqual(Array.from(payload.slice(0x12, 0x18)), [14, 30, 5, 15, 6, 26]);
   // statusFlags bit 0 set
+  assert.equal(payload[0x21] & 0x01, 0x01);
+});
+
+test("applyWorkflowDeltas: 'setup-and-start' with delayed start writes startTimestamp = now + delayedStartSec", () => {
+  // Reference: easylog-reference-2.pcapng frame 443 — delayedStartSec=57s,
+  // startTimestamp = save-time + 57s (= target wall-clock).
+  const baseline = fromHex(FIXTURE_HEX);
+  const edits = parseEditState(baseline);
+  edits.delayedStartSec = 57;
+  const payload = buildEditedConfig(baseline, edits);
+  const now = new Date(2026, 4, 2, 13, 55, 3);  // 2026-05-02 13:55:03
+  applyWorkflowDeltas(payload, 'setup-and-start', now);
+  // startTimestamp → 13:56:00 on 2026-05-02 (now + 57s)
+  assert.deepEqual(Array.from(payload.slice(0x12, 0x18)), [13, 56, 0, 2, 5, 26]);
+  // delayedStartSec preserved at 0x18-0x1B
+  assert.deepEqual(Array.from(payload.slice(0x18, 0x1c)), [57, 0, 0, 0]);
   assert.equal(payload[0x21] & 0x01, 0x01);
 });
 

@@ -180,12 +180,24 @@ export function applyWorkflowDeltas(payload, workflow, now) {
   }
   switch (workflow) {
     case 'setup-and-start':
-    case 'download-and-resume':
-      payload.set(encodeStartTimestamp(now), 0x12);
+    case 'download-and-resume': {
+      // EasyLog (per the second pcap reference) writes startTimestamp = the
+      // TARGET wall-clock when logging will begin (= now + delayedStartSec),
+      // not the save-time. delayedStartSec was already spliced into the
+      // payload by buildEditedConfig — read it back to derive the target.
+      const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+      const delaySec = dv.getUint32(0x18, true);
+      const target = new Date(now.getTime() + delaySec * 1000);
+      payload.set(encodeStartTimestamp(target), 0x12);
       payload[0x1e] = 0; payload[0x1f] = 0;
       payload[0x21] = setBit(payload[0x21], 0, true);
       break;
+    }
     case 'stop-logging':
+      // The firmware appears to ignore writes to bit 0 of 0x21 — every Load
+      // after a 0x00 write reads back 0x01. EasyLog also writes 0x00 here
+      // (twice in the reference capture) without effect. We mirror that
+      // behavior; actually stopping the device requires the physical button.
       payload[0x21] = setBit(payload[0x21], 0, false);
       break;
     default:
