@@ -181,24 +181,30 @@ export function applyWorkflowDeltas(payload, workflow, now) {
   switch (workflow) {
     case 'setup-and-start':
     case 'download-and-resume': {
-      // EasyLog (per the second pcap reference) writes startTimestamp = the
-      // TARGET wall-clock when logging will begin (= now + delayedStartSec),
-      // not the save-time. delayedStartSec was already spliced into the
-      // payload by buildEditedConfig — read it back to derive the target.
+      // EasyLog (per pcap reference 2 frame 443 and reference 3 frame 422)
+      // writes startTimestamp = the TARGET wall-clock when logging will
+      // begin (= now + delayedStartSec). delayedStartSec was already
+      // spliced into the payload by buildEditedConfig — read it back here.
       const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
       const delaySec = dv.getUint32(0x18, true);
       const target = new Date(now.getTime() + delaySec * 1000);
       payload.set(encodeStartTimestamp(target), 0x12);
       payload[0x1e] = 0; payload[0x1f] = 0;
-      payload[0x21] = setBit(payload[0x21], 0, true);
+      // Hard-set 0x21 to 0x01 — not setBit(_, 0, true). EasyLog never
+      // preserves bit 1 across a host save: post-reset baseline can have
+      // bit 1 set ("session ended") which appears to block the firmware
+      // from honoring a new session if we leave it set. EasyLog's
+      // setup-and-start save in pcap reference 3 frame 422 wrote exactly
+      // 0x01 from a 0x02 baseline.
+      payload[0x21] = 0x01;
       break;
     }
     case 'stop-logging':
-      // The firmware appears to ignore writes to bit 0 of 0x21 — every Load
-      // after a 0x00 write reads back 0x01. EasyLog also writes 0x00 here
-      // (twice in the reference capture) without effect. We mirror that
-      // behavior; actually stopping the device requires the physical button.
-      payload[0x21] = setBit(payload[0x21], 0, false);
+      // EasyLog's stop save (pcap references 1 and 2) writes 0x21 = 0x00
+      // — clears every bit, not just bit 0. The firmware appears to
+      // reassert state on the next Load regardless, so this is a no-op
+      // in practice; we match EasyLog's wire format anyway.
+      payload[0x21] = 0x00;
       break;
     default:
       throw new Error(`applyWorkflowDeltas: unknown workflow ${workflow}`);

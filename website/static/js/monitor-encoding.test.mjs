@@ -305,17 +305,28 @@ test("applyWorkflowDeltas: 'download-and-resume' is identical to setup-and-start
   assert.deepEqual(Array.from(a), Array.from(b));
 });
 
-test("applyWorkflowDeltas: 'stop-logging' clears bit 0 of 0x21 and leaves sampleCount/timestamp alone", () => {
+test("applyWorkflowDeltas: 'stop-logging' writes 0x21 = 0x00 (matches EasyLog) and leaves sampleCount/timestamp alone", () => {
   const baseline = fromHex(FIXTURE_HEX);
   const payload = buildEditedConfig(baseline, parseEditState(baseline));
   const now = new Date(2026, 5, 15, 14, 30, 5);
   applyWorkflowDeltas(payload, 'stop-logging', now);
-  assert.equal(payload[0x21] & 0x01, 0);
+  assert.equal(payload[0x21], 0x00);
   // sampleCount unchanged from baseline (0x01be = 446)
   assert.equal(payload[0x1e], baseline[0x1e]);
   assert.equal(payload[0x1f], baseline[0x1f]);
   // startTimestamp unchanged
   assert.deepEqual(Array.from(payload.slice(0x12, 0x18)), Array.from(baseline.slice(0x12, 0x18)));
+});
+
+test("applyWorkflowDeltas: 'setup-and-start' writes 0x21 = 0x01 even from a baseline with bit 1 set", () => {
+  // Post-reset state has 0x21 = 0x02. EasyLog's setup save writes 0x01
+  // (clears bit 1, sets bit 0). Confirms our hard-set isn't preserving
+  // a stale "session ended" bit.
+  const baseline = fromHex(FIXTURE_HEX);
+  baseline[0x21] = 0x02;
+  const payload = buildEditedConfig(baseline, parseEditState(baseline));
+  applyWorkflowDeltas(payload, 'setup-and-start', new Date(2026, 4, 2, 14, 5, 0));
+  assert.equal(payload[0x21], 0x01);
 });
 
 test("applyWorkflowDeltas: unknown workflow throws", () => {
