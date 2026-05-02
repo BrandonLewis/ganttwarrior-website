@@ -186,3 +186,31 @@ export function applyWorkflowDeltas(payload, workflow, now) {
       throw new Error(`applyWorkflowDeltas: unknown workflow ${workflow}`);
   }
 }
+
+const DIFF_FIELDS = [
+  'deviceName',
+  'unitIsF',
+  'sampleIntervalSec',
+  'delayedStartSec',
+  'alarmHi.enabled',
+  'alarmHi.value',
+  'alarmLo.enabled',
+  'alarmLo.value',
+];
+
+function getField(state, path) {
+  const parts = path.split('.');
+  let v = state;
+  for (const p of parts) v = v?.[p];
+  return v;
+}
+
+export function computeDiff(baseline, current) {
+  const out = [];
+  for (const field of DIFF_FIELDS) {
+    const before = getField(baseline, field);
+    const after  = getField(current, field);
+    if (before !== after) out.push({ field, before, after });
+  }
+  return out;
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat, setBit, parseEditState, buildEditedConfig, applyWorkflowDeltas } from './monitor-encoding.mjs';
+import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat, setBit, parseEditState, buildEditedConfig, applyWorkflowDeltas, computeDiff } from './monitor-encoding.mjs';
 
 test('encodeDeviceName: short name right-padded with NUL to 16 bytes', () => {
   const out = encodeDeviceName('Sensor 111');
@@ -269,4 +269,43 @@ test("applyWorkflowDeltas: 'stop-logging' clears bit 0 of 0x21 and leaves sample
 test("applyWorkflowDeltas: unknown workflow throws", () => {
   const payload = new Uint8Array(256);
   assert.throws(() => applyWorkflowDeltas(payload, 'bogus', new Date()));
+});
+
+test('computeDiff: identical states → empty diff', () => {
+  const baseline = parseEditState(fromHex(FIXTURE_HEX));
+  const current = parseEditState(fromHex(FIXTURE_HEX));
+  assert.deepEqual(computeDiff(baseline, current), []);
+});
+
+test('computeDiff: name change → one entry', () => {
+  const baseline = parseEditState(fromHex(FIXTURE_HEX));
+  const current = { ...baseline, deviceName: 'Walk-in cooler' };
+  const diff = computeDiff(baseline, current);
+  assert.equal(diff.length, 1);
+  assert.equal(diff[0].field, 'deviceName');
+  assert.equal(diff[0].before, 'Sensor 111');
+  assert.equal(diff[0].after, 'Walk-in cooler');
+});
+
+test('computeDiff: alarm checkbox change → one entry', () => {
+  const baseline = parseEditState(fromHex(FIXTURE_HEX));
+  const current = {
+    ...baseline,
+    alarmHi: { ...baseline.alarmHi, enabled: false },
+  };
+  const diff = computeDiff(baseline, current);
+  assert.equal(diff.length, 1);
+  assert.equal(diff[0].field, 'alarmHi.enabled');
+});
+
+test('computeDiff: multiple changes → multiple entries in stable order', () => {
+  const baseline = parseEditState(fromHex(FIXTURE_HEX));
+  const current = {
+    ...baseline,
+    deviceName: 'X',
+    sampleIntervalSec: 60,
+    delayedStartSec: 3600,
+  };
+  const fields = computeDiff(baseline, current).map(d => d.field);
+  assert.deepEqual(fields, ['deviceName', 'sampleIntervalSec', 'delayedStartSec']);
 });
