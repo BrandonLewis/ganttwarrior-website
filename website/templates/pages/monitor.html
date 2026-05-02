@@ -401,19 +401,47 @@
     <div class="panel-head"><span>device configuration</span><span class="meta" id="cfg-meta">load config to populate</span></div>
     <div class="panel-body">
       <div class="kv" id="config-kv">
-        <div class="k">device type</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">device name</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">serial number</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">firmware</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">unit</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">sample interval</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">sample count</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">start timestamp</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">delayed start</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">alarm flags</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">status flags</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">temp alarm hi/lo</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">cal1 / cal2 (f32)</div><div class="v"><span class="dim">·</span></div>
+        <div class="k">device type</div><div class="v" id="ro-device-type"><span class="dim">·</span></div>
+        <div class="k">device name</div>
+        <div class="v"><input id="edit-name" type="text" maxlength="16" disabled> <span class="dim" id="edit-name-count">0/16</span></div>
+        <div class="k">serial number</div><div class="v" id="ro-serial"><span class="dim">·</span></div>
+        <div class="k">firmware</div><div class="v" id="ro-firmware"><span class="dim">·</span></div>
+        <div class="k">unit</div>
+        <div class="v"><select id="edit-unit" disabled><option value="F">°F</option><option value="C">°C</option></select></div>
+        <div class="k">sample interval</div>
+        <div class="v"><select id="edit-interval" disabled></select></div>
+        <div class="k">delayed start</div>
+        <div class="v">
+          <label><input type="radio" name="edit-delay-mode" value="immediate" disabled> Immediate start</label>
+          <label style="margin-left:12px"><input type="radio" name="edit-delay-mode" value="delayed" disabled> Delay the start</label>
+          <div id="edit-delay-fields" style="margin-top:6px;margin-left:18px" hidden>
+            <input id="edit-delay-date" type="date" disabled>
+            <input id="edit-delay-time" type="time" step="1" disabled>
+            <select id="edit-delay-ampm" disabled><option>AM</option><option>PM</option></select>
+            <span id="edit-delay-hint" class="dim" style="margin-left:8px"></span>
+          </div>
+        </div>
+        <div class="k">temp alarm hi</div>
+        <div class="v"><label><input id="edit-alarm-hi-on" type="checkbox" disabled> alarm on hi</label>
+          <input id="edit-alarm-hi-value" type="number" step="0.1" disabled style="width:80px;margin-left:10px"> <span class="dim" id="edit-alarm-hi-unit">°F</span></div>
+        <div class="k">temp alarm lo</div>
+        <div class="v"><label><input id="edit-alarm-lo-on" type="checkbox" disabled> alarm on lo</label>
+          <input id="edit-alarm-lo-value" type="number" step="0.1" disabled style="width:80px;margin-left:10px"> <span class="dim" id="edit-alarm-lo-unit">°F</span></div>
+        <div class="k">sample count</div><div class="v" id="ro-sample-count"><span class="dim">·</span></div>
+        <div class="k">last start timestamp</div><div class="v" id="ro-start-ts"><span class="dim">·</span></div>
+        <div class="k">cal1 / cal2</div><div class="v" id="ro-cal"><span class="dim">·</span></div>
+        <div class="k">alarm flags / status flags</div><div class="v" id="ro-flags"><span class="dim">·</span></div>
+      </div>
+
+      <div id="edit-warning" class="warning-bar" hidden style="margin-top:14px;padding:10px;background:#2a1a0a;border:1px solid #6a4a1a;border-radius:4px;color:#f0a050">
+        ⚠ <strong><span id="edit-change-count">0 fields modified</span></strong> — writes to flash<br>
+        <span id="edit-diff-text" style="font-size:11px;color:#caa080"></span>
+        <div style="margin-top:6px">
+          <button id="btn-setup-start">Setup &amp; Start</button>
+          <button id="btn-download-resume">Download &amp; Resume</button>
+          <button id="btn-stop-logging">Stop Logging</button>
+          <button id="btn-discard" class="ghost">Discard changes</button>
+        </div>
       </div>
     </div>
   </section>
