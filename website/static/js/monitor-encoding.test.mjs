@@ -91,7 +91,7 @@ test('relativeTimeLabel: future is "in X..."', () => {
   assert.equal(relativeTimeLabel(165180), 'in 1d 21h');
 });
 
-test('relativeTimeLabel: past is empty (we never set delays in the past)', () => {
+test('relativeTimeLabel: past collapses to "now"', () => {
   assert.equal(relativeTimeLabel(-1), 'now');
 });
 
