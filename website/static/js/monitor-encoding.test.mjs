@@ -193,6 +193,10 @@ test('parseEditState: alarmFlags bits become alarm.enabled', () => {
   assert.equal(st.alarmLo.enabled, true);
 });
 
+test('parseEditState: rejects undersized buffer', () => {
+  assert.throws(() => parseEditState(new Uint8Array(100)));
+});
+
 test('buildEditedConfig: returns a 256-byte copy that preserves baseline bytes outside edited and threshold offsets', () => {
   const baseline = fromHex(FIXTURE_HEX);
   const edits = parseEditState(baseline);

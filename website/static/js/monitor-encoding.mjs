@@ -110,6 +110,9 @@ export function setBit(byte, index, on) {
 const TD = new TextDecoder('latin1');
 
 export function parseEditState(buf) {
+  if (buf.length < 256) {
+    throw new RangeError(`parseEditState: buffer must be ≥ 256 bytes, got ${buf.length}`);
+  }
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   const name = TD.decode(buf.slice(0x02, 0x12)).replace(/\0+$/, '');
   const unitWord = dv.getUint16(0x2e, true);
