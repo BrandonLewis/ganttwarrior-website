@@ -43,3 +43,26 @@ export function fillDurationLabel(intervalSec, maxSamples = MAX_SAMPLES) {
   if (hours > 0)             return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
+
+export function encodeUint32LE(value) {
+  if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+    throw new RangeError(`encodeUint32LE: ${value} out of [0, 4294967295]`);
+  }
+  return new Uint8Array([
+    value         & 0xff,
+    (value >>> 8) & 0xff,
+    (value >>> 16) & 0xff,
+    (value >>> 24) & 0xff,
+  ]);
+}
+
+export function relativeTimeLabel(deltaSec) {
+  if (deltaSec <= 0) return 'now';
+  const days = Math.floor(deltaSec / 86400);
+  const hours = Math.floor((deltaSec % 86400) / 3600);
+  const minutes = Math.floor((deltaSec % 3600) / 60);
+  if (days > 0)    return `in ${days}d ${hours}h`;
+  if (hours > 0)   return `in ${hours}h ${minutes}m`;
+  if (minutes > 0) return `in ${minutes}m`;
+  return `in ${deltaSec}s`;
+}

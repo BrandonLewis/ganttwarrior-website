@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES } from './monitor-encoding.mjs';
+import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel } from './monitor-encoding.mjs';
 
 test('encodeDeviceName: short name right-padded with NUL to 16 bytes', () => {
   const out = encodeDeviceName('Sensor 111');
@@ -64,4 +64,33 @@ test('SAMPLE_INTERVAL_PRESETS: labels match fillDurationLabel output', () => {
     const dur = fillDurationLabel(p.seconds, MAX_SAMPLES);
     assert.ok(dur.length > 0, `no duration for ${p.label}`);
   }
+});
+
+test('encodeUint32LE: typical values', () => {
+  assert.deepEqual(Array.from(encodeUint32LE(0)),          [0x00, 0x00, 0x00, 0x00]);
+  assert.deepEqual(Array.from(encodeUint32LE(1)),          [0x01, 0x00, 0x00, 0x00]);
+  assert.deepEqual(Array.from(encodeUint32LE(60)),         [0x3c, 0x00, 0x00, 0x00]);
+  assert.deepEqual(Array.from(encodeUint32LE(86400)),      [0x80, 0x51, 0x01, 0x00]);
+  assert.deepEqual(Array.from(encodeUint32LE(0xffffffff)), [0xff, 0xff, 0xff, 0xff]);
+});
+
+test('encodeUint32LE: rejects out-of-range', () => {
+  assert.throws(() => encodeUint32LE(-1));
+  assert.throws(() => encodeUint32LE(0x100000000));
+});
+
+test('relativeTimeLabel: zero is "now"', () => {
+  assert.equal(relativeTimeLabel(0), 'now');
+});
+
+test('relativeTimeLabel: future is "in X..."', () => {
+  assert.equal(relativeTimeLabel(45),     'in 45s');
+  assert.equal(relativeTimeLabel(120),    'in 2m');
+  assert.equal(relativeTimeLabel(3700),   'in 1h 1m');
+  assert.equal(relativeTimeLabel(90000),  'in 1d 1h');
+  assert.equal(relativeTimeLabel(165180), 'in 1d 21h');
+});
+
+test('relativeTimeLabel: past is empty (we never set delays in the past)', () => {
+  assert.equal(relativeTimeLabel(-1), 'now');
 });
