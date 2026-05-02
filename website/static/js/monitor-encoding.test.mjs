@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat, setBit } from './monitor-encoding.mjs';
+import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat, setBit, parseEditState } from './monitor-encoding.mjs';
 
 test('encodeDeviceName: short name right-padded with NUL to 16 bytes', () => {
   const out = encodeDeviceName('Sensor 111');
@@ -147,4 +147,34 @@ test('setBit: clear a set bit', () => {
 test('setBit: rejects invalid index', () => {
   assert.throws(() => setBit(0, -1, true));
   assert.throws(() => setBit(0, 8, true));
+});
+
+const FIXTURE_HEX = (
+  '0a0053656e736f72203131310000000000001507200105' +
+  '1a000000000500be01030110131d265038a751b23c0000' +
+  '21000000000019060000100e0000ffffffff' +
+  '00'.repeat(256 - 64)  // remainder mostly zeros / 0xff
+);
+
+function fromHex(s) {
+  const out = new Uint8Array(s.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(s.substr(i * 2, 2), 16);
+  return out;
+}
+
+test('parseEditState: extracts editable fields from a real config block', () => {
+  const buf = fromHex(FIXTURE_HEX);
+  const st = parseEditState(buf);
+  assert.equal(st.deviceName, 'Sensor 111');
+  assert.equal(st.unitIsF, true);          // 0x2E = 0x21, bit 0 set → °F
+  assert.equal(st.sampleIntervalSec, 5);   // 0x1C-0x1D = 05 00
+  assert.equal(st.delayedStartSec, 0);     // 0x18-0x1B = 00 00 00 00
+});
+
+test('parseEditState: alarmFlags bits become alarm.enabled', () => {
+  const buf = fromHex(FIXTURE_HEX);
+  const st = parseEditState(buf);
+  // 0x20 = 0x03 → bits 0 and 1 are set; we map bit 0 → hi, bit 1 → lo.
+  assert.equal(st.alarmHi.enabled, true);
+  assert.equal(st.alarmLo.enabled, true);
 });

@@ -99,3 +99,29 @@ export function setBit(byte, index, on) {
   const mask = 1 << index;
   return on ? (byte | mask) & 0xff : (byte & ~mask) & 0xff;
 }
+
+const TD = new TextDecoder('latin1');
+
+export function parseEditState(buf) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const name = TD.decode(buf.slice(0x02, 0x12)).replace(/\0+$/, '');
+  const unitWord = dv.getUint16(0x2e, true);
+  const intervalSec = dv.getUint16(0x1c, true);
+  const delaySec = dv.getUint32(0x18, true);
+  const alarmFlags = dv.getUint8(0x20);
+
+  // Alarm threshold ASCII fields — capture had them empty so this is
+  // best-effort. parseFloat on garbage returns NaN; we coerce to 0.
+  const hiStr = TD.decode(buf.slice(0x70, 0x78)).replace(/\0+/g, '').trim();
+  const loStr = TD.decode(buf.slice(0x78, 0x80)).replace(/\0+/g, '').trim();
+  const hi = parseFloat(hiStr); const lo = parseFloat(loStr);
+
+  return {
+    deviceName: name,
+    unitIsF: (unitWord & 0x01) !== 0,
+    sampleIntervalSec: intervalSec,
+    delayedStartSec: delaySec,
+    alarmHi: { enabled: (alarmFlags & 0x01) !== 0, value: Number.isFinite(hi) ? hi : 0 },
+    alarmLo: { enabled: (alarmFlags & 0x02) !== 0, value: Number.isFinite(lo) ? lo : 0 },
+  };
+}
