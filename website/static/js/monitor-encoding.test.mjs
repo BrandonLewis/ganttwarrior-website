@@ -295,16 +295,6 @@ test("applyWorkflowDeltas: 'setup-and-start' with delayed start writes startTime
   assert.equal(payload[0x21] & 0x01, 0x01);
 });
 
-test("applyWorkflowDeltas: 'download-and-resume' is identical to setup-and-start", () => {
-  const baseline = fromHex(FIXTURE_HEX);
-  const a = buildEditedConfig(baseline, parseEditState(baseline));
-  const b = buildEditedConfig(baseline, parseEditState(baseline));
-  const now = new Date(2026, 0, 1, 0, 0, 0);
-  applyWorkflowDeltas(a, 'setup-and-start', now);
-  applyWorkflowDeltas(b, 'download-and-resume', now);
-  assert.deepEqual(Array.from(a), Array.from(b));
-});
-
 test("applyWorkflowDeltas: 'stop-logging' writes 0x21 = 0x00 (matches EasyLog) and leaves sampleCount/timestamp alone", () => {
   const baseline = fromHex(FIXTURE_HEX);
   const payload = buildEditedConfig(baseline, parseEditState(baseline));

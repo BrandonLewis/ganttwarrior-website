@@ -435,7 +435,6 @@
 
       <div id="workflow-actions" hidden style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
         <button id="btn-setup-start" class="primary">Setup &amp; Start</button>
-        <button id="btn-download-resume">Download &amp; Resume</button>
         <button id="btn-stop-logging">Stop Logging</button>
         <button id="btn-discard" class="ghost" hidden>Discard changes</button>
       </div>
@@ -1259,34 +1258,13 @@ async function atomicReadOnly() {
   }
 }
 
-async function runWorkflow(label, workflow, opts = {}) {
+async function runWorkflow(label, workflow) {
   if (!device) { log('not connected', 'warn'); return; }
   if (busy) { log('command in flight, wait', 'warn'); return; }
   if (!lastConfig?.raw) { log('load config first — need a baseline block', 'warn'); return; }
   log(`── ${label.toUpperCase()} ──`, 'cmd');
   setBusy(true);
   try {
-    if (opts.preDownload) {
-      // EasyLog's actual post-download pattern (capture 3 frames 358-422)
-      // is: Download → Load → Load → Save (setup-and-start). No
-      // intermediate save. The two Loads observe the post-download
-      // transient state (0x21 = 0x00) and refresh our baseline before the
-      // setup save splices edits in.
-      log('  pre-step 1: download samples + CSV export', 'info');
-      await withCommandEnvelope('Download Samples', async () => {
-        await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
-        const buf = await readFramed();
-        lastSampleBytes = buf;
-        renderHexDump(buf);
-        decodeAndRender();
-      });
-      exportCsv();
-
-      log('  pre-step 2: load config (observe post-download transient)', 'info');
-      await loadConfigInner();
-      log('  pre-step 3: load config (refresh baseline)', 'info');
-      await loadConfigInner();
-    }
     const edits = getCurrentEditState();
     const payload = buildEditedConfig(lastConfig.raw, edits);
     applyWorkflowDeltas(payload, workflow, new Date());
@@ -1312,8 +1290,6 @@ $('btn-clear-log').addEventListener('click', () => { logEl.innerHTML = ''; log('
 $('decoder').addEventListener('change', decodeAndRender);
 document.getElementById('btn-setup-start').addEventListener('click', () =>
   runWorkflow('Setup & Start', 'setup-and-start'));
-document.getElementById('btn-download-resume').addEventListener('click', () =>
-  runWorkflow('Download & Resume', 'download-and-resume', { preDownload: true }));
 document.getElementById('btn-stop-logging').addEventListener('click', () =>
   runWorkflow('Stop Logging', 'stop-logging'));
 document.getElementById('btn-discard').addEventListener('click', () => {

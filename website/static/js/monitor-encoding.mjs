@@ -179,8 +179,7 @@ export function applyWorkflowDeltas(payload, workflow, now) {
     throw new RangeError(`applyWorkflowDeltas: payload must be 256 bytes, got ${payload.length}`);
   }
   switch (workflow) {
-    case 'setup-and-start':
-    case 'download-and-resume': {
+    case 'setup-and-start': {
       // EasyLog (per pcap reference 2 frame 443 and reference 3 frame 422)
       // writes startTimestamp = the TARGET wall-clock when logging will
       // begin (= now + delayedStartSec). delayedStartSec was already
