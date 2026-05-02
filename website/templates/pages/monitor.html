@@ -1300,7 +1300,7 @@ async function runWorkflow(label, workflow, opts = {}) {
       log('  step 2: load config (observe post-download state)', 'info');
       await loadConfigInner();
 
-      await settlingPause(20);
+      await settlingPause(10);
 
       log('  step 3: load config (final pre-save read)', 'info');
       await loadConfigInner();
