@@ -561,8 +561,6 @@ function enableConnected(connected) {
   $('btn-load-config').disabled = !connected || busy;
   $('btn-download').disabled = !connected || busy;
   $('btn-read-sensor').disabled = !connected || busy;
-  $('btn-read-and-restart').disabled = !connected || busy;
-  $('btn-restart-logging').disabled = !connected || busy;
   $('btn-connect').disabled = connected;
 }
 
@@ -574,8 +572,6 @@ function setBusy(b) {
   $('btn-load-config').disabled = !device || busy;
   $('btn-download').disabled = !device || busy;
   $('btn-read-sensor').disabled = !device || busy;
-  $('btn-read-and-restart').disabled = !device || busy;
-  $('btn-restart-logging').disabled = !device || busy;
 }
 
 // ───────────────────────────────────────────────────────────
@@ -1046,44 +1042,6 @@ async function saveConfig(modifiedBytes) {
   await withCommandEnvelope('Save Config', () => saveConfigInner(modifiedBytes));
 }
 
-async function restartLogging() {
-  // Throws on failure so callers (atomicRead) can react. The standalone
-  // button handler wraps this in its own try/catch for UI feedback.
-  if (!device) throw new Error('not connected');
-  if (busy) throw new Error('command in flight, wait');
-  if (!lastConfig?.raw) {
-    throw new Error('load config first — restart needs the current config block to modify');
-  }
-  setBusy(true);
-  try {
-    log('── RESTART LOGGING ──', 'cmd');
-    const cfg = new Uint8Array(lastConfig.raw);  // copy
-
-    const now = new Date();
-    cfg[0x12] = now.getHours();
-    cfg[0x13] = now.getMinutes();
-    cfg[0x14] = now.getSeconds();
-    cfg[0x15] = now.getDate();
-    cfg[0x16] = now.getMonth() + 1;
-    cfg[0x17] = now.getFullYear() - 2000;
-
-    // delayedStartSec = 0 (4-byte LE u32 at 0x18)
-    cfg[0x18] = cfg[0x19] = cfg[0x1a] = cfg[0x1b] = 0;
-    // sampleCount = 0 (2-byte LE u16 at 0x1e)
-    cfg[0x1e] = cfg[0x1f] = 0;
-    // statusFlags at 0x21: bit 0 is the logging-active flag (per the
-    // EasyLog Win32 USBPcap capture — sigrok wiki said bit 4, observed
-    // bytes say bit 0). Keep other bits intact.
-    cfg[0x21] = (cfg[0x21] | 0x01);
-
-    log(`new start = ${now.toString().slice(0, 24)} · sampleCount → 0 · status 0x${hex2(cfg[0x21])}`);
-    await saveConfig(cfg);
-    log('✓ logging restart sent · verify by Disconnect → reconnect → Load Config', 'ok');
-  } finally {
-    setBusy(false);
-  }
-}
-
 function decodeAndRender() {
   if (!lastSampleBytes || !lastConfig) return;
   const key = $('decoder').value;
@@ -1239,40 +1197,24 @@ function exportCsv() {
 $('btn-connect').addEventListener('click', connect);
 $('btn-disconnect').addEventListener('click', disconnect);
 
-async function atomicRead({ andRestart }) {
-  // Shared atomic-read flow: loadConfig → downloadSamples → exportCsv
-  // → optionally restartLogging. Each leg runs its own vendor envelope.
+async function atomicReadOnly() {
+  // load → download → CSV. No write. Used by the "Read sensor → CSV" button.
   if (!device) { log('not connected', 'warn'); return; }
   if (busy) { log('command in flight, wait', 'warn'); return; }
-  log(andRestart ? '── READ + RESTART (atomic) ──' : '── READ SENSOR (atomic) ──', 'cmd');
+  log('── READ SENSOR (atomic) ──', 'cmd');
   try {
     await loadConfig();
     if (!lastConfig) throw new Error('Load Config did not return data');
     await downloadSamples();
     if (!lastSampleBytes) throw new Error('Download Samples did not return data');
     exportCsv();
-    const summary = `sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · ` +
-                    `${lastConfig.sampleCount} samples · CSV exported`;
-    if (andRestart) {
-      await restartLogging();
-      log(`✓ ${summary} · LOGGING RESTARTED · safe to Disconnect & redeploy`, 'ok');
-    } else {
-      log(`✓ ${summary} · safe to Disconnect`, 'ok');
-    }
+    log(`✓ sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · ${lastConfig.sampleCount} samples · CSV exported`, 'ok');
   } catch (err) {
     log(`atomic flow failed: ${err.message}`, 'error');
   }
 }
 
-$('btn-read-sensor').addEventListener('click', () => atomicRead({ andRestart: false }));
-$('btn-read-and-restart').addEventListener('click', () => atomicRead({ andRestart: true }));
-$('btn-restart-logging').addEventListener('click', async () => {
-  try { await restartLogging(); }
-  catch (err) {
-    log(`restartLogging failed: ${err.message}`, 'error');
-    log('  device state may be uncertain — verify with Load Config before disconnecting', 'warn');
-  }
-});
+document.getElementById('btn-read-sensor').addEventListener('click', atomicReadOnly);
 $('btn-load-config').addEventListener('click', loadConfig);
 $('btn-download').addEventListener('click', downloadSamples);
 $('btn-export').addEventListener('click', exportCsv);
