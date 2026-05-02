@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -491,8 +492,17 @@
 
 </main>
 
-<script>
-"use strict";
+<script type="module">
+import {
+  SAMPLE_INTERVAL_PRESETS,
+  MAX_SAMPLES,
+  parseEditState,
+  buildEditedConfig,
+  applyWorkflowDeltas,
+  computeDiff,
+  fillDurationLabel,
+  relativeTimeLabel,
+} from "{% static 'js/monitor-encoding.mjs' %}";
 
 // ───────────────────────────────────────────────────────────
 //  protocol constants
@@ -830,6 +840,53 @@ const DECODERS = {
 };
 
 // ───────────────────────────────────────────────────────────
+//  edit-form helpers
+// ───────────────────────────────────────────────────────────
+let baselineEditState = null;  // last loaded EditState (for diff and discard)
+
+function populateIntervalDropdown() {
+  const sel = document.getElementById('edit-interval');
+  sel.innerHTML = '';
+  for (const p of SAMPLE_INTERVAL_PRESETS) {
+    const opt = document.createElement('option');
+    opt.value = String(p.seconds);
+    opt.textContent = `${p.label}  (${fillDurationLabel(p.seconds)})`;
+    sel.appendChild(opt);
+  }
+}
+
+function populateEditForm(configBlock) {
+  const st = parseEditState(configBlock);
+  baselineEditState = st;
+
+  document.getElementById('edit-name').value = st.deviceName;
+  document.getElementById('edit-name-count').textContent = `${st.deviceName.length}/16`;
+  document.getElementById('edit-unit').value = st.unitIsF ? 'F' : 'C';
+  document.getElementById('edit-interval').value = String(st.sampleIntervalSec);
+
+  const isImmediate = st.delayedStartSec === 0;
+  document.querySelector('input[name="edit-delay-mode"][value="immediate"]').checked = isImmediate;
+  document.querySelector('input[name="edit-delay-mode"][value="delayed"]').checked = !isImmediate;
+  document.getElementById('edit-delay-fields').hidden = isImmediate;
+
+  document.getElementById('edit-alarm-hi-on').checked = st.alarmHi.enabled;
+  document.getElementById('edit-alarm-hi-value').value = st.alarmHi.value;
+  document.getElementById('edit-alarm-lo-on').checked = st.alarmLo.enabled;
+  document.getElementById('edit-alarm-lo-value').value = st.alarmLo.value;
+
+  // Enable inputs (they start disabled when no device is connected)
+  for (const id of ['edit-name', 'edit-unit', 'edit-interval',
+                    'edit-alarm-hi-on', 'edit-alarm-hi-value',
+                    'edit-alarm-lo-on', 'edit-alarm-lo-value']) {
+    document.getElementById(id).disabled = false;
+  }
+  for (const r of document.querySelectorAll('input[name="edit-delay-mode"]')) r.disabled = false;
+  for (const id of ['edit-delay-date', 'edit-delay-time', 'edit-delay-ampm']) {
+    document.getElementById(id).disabled = isImmediate;
+  }
+}
+
+// ───────────────────────────────────────────────────────────
 //  high-level operations
 // ───────────────────────────────────────────────────────────
 async function loadConfig() {
@@ -845,6 +902,7 @@ async function loadConfig() {
       log(`config received · ${buf.length} bytes`, 'ok');
       lastConfig = parseConfig(buf);
       renderConfig(lastConfig);
+      populateEditForm(buf);
     });
     setStatus('on', `connected · ${lastConfig.deviceTypeName}`);
   } catch (err) {
@@ -1174,6 +1232,7 @@ $('decoder').addEventListener('change', decodeAndRender);
 if (!navigator.usb) {
   $('webusb-warning').hidden = false;
 }
+populateIntervalDropdown();
 enableConnected(false);
 setStatus('', 'disconnected');
 log('ready · plug in EL-USB-TC and click Connect', 'info');
