@@ -1267,9 +1267,14 @@ async function runWorkflow(label, workflow, opts = {}) {
   setBusy(true);
   try {
     if (opts.preDownload) {
-      // Inline the relevant parts of downloadSamples — it sets busy itself,
-      // so call its core via withCommandEnvelope here.
-      log('  pre-step: download samples + CSV export', 'info');
+      // Full EasyLog post-download pattern (capture 3 frames 358-443):
+      //   Download → Load → Save (transient-confirm) → Load → Save (setup).
+      // Skipping any of these middle steps leaves the device stuck and
+      // refusing to begin a new session — a battery pull becomes the only
+      // recovery. The transient-confirm save writes the post-download
+      // bytes back verbatim (with 0x21 = 0x00) so the firmware acknowledges
+      // it has handed off the transient state.
+      log('  pre-step 1: download samples + CSV export', 'info');
       await withCommandEnvelope('Download Samples', async () => {
         await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
         const buf = await readFramed();
@@ -1278,13 +1283,16 @@ async function runWorkflow(label, workflow, opts = {}) {
         decodeAndRender();
       });
       exportCsv();
-      // Re-Load Config so the post-download transient state (0x21=0x00) is
-      // observable and our save payload is built from the FRESH bytes the
-      // device has now, not the stale pre-download config. EasyLog's
-      // capture 3 frames 358-431 do the same: Download → Load → Save → Load
-      // → Save. Without this Load the device gets stuck post-download and
-      // won't begin a new session, requiring a battery pull to recover.
-      log('  pre-step: re-load config to settle post-download state', 'info');
+
+      log('  pre-step 2: load config (observe post-download transient)', 'info');
+      await loadConfigInner();
+
+      log('  pre-step 3: transient-confirm save (0x21 = 0x00)', 'info');
+      const confirmPayload = new Uint8Array(lastConfig.raw);
+      confirmPayload[0x21] = 0x00;
+      await saveConfig(confirmPayload);
+
+      log('  pre-step 4: load config (observe post-confirm state)', 'info');
       await loadConfigInner();
     }
     const edits = getCurrentEditState();
