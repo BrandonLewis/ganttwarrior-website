@@ -388,11 +388,6 @@
         <button id="btn-export" class="ghost">Export CSV</button>
         <button id="btn-clear-log" class="ghost">Clear Log</button>
       </div>
-      <div class="actions" style="border-top:1px dashed var(--border);padding-top:8px;margin-top:6px">
-        <span style="color:var(--orange);font-size:11px;font-family:var(--mono)">⚠ writes flash · armed pending hardware verification of the per-command vendor envelope. Verify Load + Download work cleanly across a Disconnect first.</span>
-        <button id="btn-read-and-restart" class="ghost" title="Atomic: load → download → CSV → restart logging. Touches flash; verify metadata after with EasyLog or another Load Config.">Read &amp; Restart</button>
-        <button id="btn-restart-logging" class="ghost" title="Save Config with sampleCount=0 + new start timestamp + status bit 0 set. Requires a prior Load Config so we have the current 256-byte block to modify.">Restart Logging</button>
-      </div>
     </div>
   </section>
 
