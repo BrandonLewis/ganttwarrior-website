@@ -15,3 +15,13 @@ export const SAMPLE_INTERVAL_PRESETS = [
   { seconds: 21600, label: '6 hr' },
   { seconds: 43200, label: '12 hr' },
 ];
+
+export function encodeDeviceName(name) {
+  const out = new Uint8Array(16);
+  const truncated = (name ?? '').slice(0, 16);
+  for (let i = 0; i < truncated.length; i++) {
+    const code = truncated.charCodeAt(i);
+    out[i] = code < 0x20 || code > 0x7e ? 0x3f : code;
+  }
+  return out;
+}
