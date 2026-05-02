@@ -131,6 +131,15 @@ test('encodeAsciiFloat: throws if formatted value exceeds 8 bytes', () => {
   assert.throws(() => encodeAsciiFloat(123456.789));
 });
 
+test('encodeAsciiFloat: rejects NaN', () => {
+  assert.throws(() => encodeAsciiFloat(NaN));
+});
+
+test('encodeAsciiFloat: rejects Infinity', () => {
+  assert.throws(() => encodeAsciiFloat(Infinity));
+  assert.throws(() => encodeAsciiFloat(-Infinity));
+});
+
 test('setBit: set a clear bit', () => {
   assert.equal(setBit(0x00, 0, true), 0x01);
   assert.equal(setBit(0x00, 4, true), 0x10);

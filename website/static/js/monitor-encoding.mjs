@@ -83,6 +83,9 @@ export function encodeAsciiFloat(value) {
   // right-padded with NUL. The exact format EasyLog writes is unverified
   // (the reference capture had no alarms set) — we trim trailing zeros to
   // keep things compact and let the firmware parse a standard decimal.
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`encodeAsciiFloat: value must be finite, got ${value}`);
+  }
   const str = String(value);
   if (str.length > 8) {
     throw new RangeError(`encodeAsciiFloat: "${str}" exceeds 8 bytes`);
