@@ -1278,6 +1278,12 @@ $('btn-download').addEventListener('click', downloadSamples);
 $('btn-export').addEventListener('click', exportCsv);
 $('btn-clear-log').addEventListener('click', () => { logEl.innerHTML = ''; log('log cleared'); });
 $('decoder').addEventListener('change', decodeAndRender);
+document.getElementById('btn-discard').addEventListener('click', () => {
+  if (!baselineEditState || !lastConfig?.raw) return;
+  populateEditForm(lastConfig.raw);
+  updateWarningBar();
+  log('discarded pending edits — form back to last-loaded values', 'info');
+});
 
 if (!navigator.usb) {
   $('webusb-warning').hidden = false;
