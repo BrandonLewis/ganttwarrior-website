@@ -125,3 +125,45 @@ export function parseEditState(buf) {
     alarmLo: { enabled: (alarmFlags & 0x02) !== 0, value: Number.isFinite(lo) ? lo : 0 },
   };
 }
+
+export function buildEditedConfig(baseline, edits) {
+  if (baseline.length !== 256) {
+    throw new RangeError(`buildEditedConfig: baseline must be 256 bytes, got ${baseline.length}`);
+  }
+  const out = new Uint8Array(baseline);  // copy
+
+  // device name → 0x02-0x11
+  out.set(encodeDeviceName(edits.deviceName), 0x02);
+
+  // unit °F flag → bit 0 of 0x2E (preserve other bits including 0x2F)
+  out[0x2e] = setBit(out[0x2e], 0, edits.unitIsF);
+
+  // sample interval → 0x1C-0x1D
+  out.set(encodeUint16LE(edits.sampleIntervalSec), 0x1c);
+
+  // delayed start → 0x18-0x1B
+  out.set(encodeUint32LE(edits.delayedStartSec), 0x18);
+
+  // alarm thresholds → 0x70-0x77 (hi), 0x78-0x7F (lo).
+  // Only write threshold bytes when the corresponding alarm is enabled AND a
+  // non-zero value is present. Zero is the sentinel for "no value set" (it is
+  // also what parseEditState returns when the baseline threshold bytes are
+  // NUL-padded garbage). Skipping the write in those cases preserves the
+  // round-trip identity (encodeAsciiFloat(0) would write '0\0\0\0\0\0\0\0',
+  // not 0x00) and matches the spec semantic that we never write a value the
+  // user hasn't actually entered.
+  if (edits.alarmHi.enabled && edits.alarmHi.value !== 0) {
+    out.set(encodeAsciiFloat(edits.alarmHi.value), 0x70);
+  }
+  if (edits.alarmLo.enabled && edits.alarmLo.value !== 0) {
+    out.set(encodeAsciiFloat(edits.alarmLo.value), 0x78);
+  }
+
+  // alarmFlags → bits 0 (hi) and 1 (lo); preserve others
+  let flags = out[0x20];
+  flags = setBit(flags, 0, edits.alarmHi.enabled);
+  flags = setBit(flags, 1, edits.alarmLo.enabled);
+  out[0x20] = flags;
+
+  return out;
+}

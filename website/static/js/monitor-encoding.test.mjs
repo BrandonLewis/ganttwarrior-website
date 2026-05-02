@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat, setBit, parseEditState } from './monitor-encoding.mjs';
+import { encodeDeviceName, encodeUint16LE, SAMPLE_INTERVAL_PRESETS, fillDurationLabel, MAX_SAMPLES, encodeUint32LE, relativeTimeLabel, encodeStartTimestamp, encodeAsciiFloat, setBit, parseEditState, buildEditedConfig } from './monitor-encoding.mjs';
 
 test('encodeDeviceName: short name right-padded with NUL to 16 bytes', () => {
   const out = encodeDeviceName('Sensor 111');
@@ -177,4 +177,53 @@ test('parseEditState: alarmFlags bits become alarm.enabled', () => {
   // 0x20 = 0x03 → bits 0 and 1 are set; we map bit 0 → hi, bit 1 → lo.
   assert.equal(st.alarmHi.enabled, true);
   assert.equal(st.alarmLo.enabled, true);
+});
+
+test('buildEditedConfig: returns a 256-byte copy that preserves baseline bytes outside edited offsets', () => {
+  const baseline = fromHex(FIXTURE_HEX);
+  const edits = parseEditState(baseline);  // identity edit
+  const out = buildEditedConfig(baseline, edits);
+  assert.equal(out.length, 256);
+  assert.deepEqual(Array.from(out), Array.from(baseline));
+});
+
+test('buildEditedConfig: changing the device name only touches 0x02-0x11', () => {
+  const baseline = fromHex(FIXTURE_HEX);
+  const edits = parseEditState(baseline);
+  edits.deviceName = 'Walk-in cooler';
+  const out = buildEditedConfig(baseline, edits);
+  const newName = new TextDecoder('latin1').decode(out.slice(0x02, 0x12)).replace(/\0+$/, '');
+  assert.equal(newName, 'Walk-in cooler');
+  assert.deepEqual(Array.from(out.slice(0, 0x02)), Array.from(baseline.slice(0, 0x02)));
+  assert.deepEqual(Array.from(out.slice(0x12)),    Array.from(baseline.slice(0x12)));
+});
+
+test('buildEditedConfig: unit toggle flips bit 0 of 0x2E and preserves other bits', () => {
+  const baseline = fromHex(FIXTURE_HEX);  // 0x2E = 0x21 (bit 0 set, °F)
+  const edits = parseEditState(baseline);
+  edits.unitIsF = false;
+  const out = buildEditedConfig(baseline, edits);
+  assert.equal(out[0x2e], 0x20);  // bit 0 cleared, bit 5 preserved
+  assert.equal(out[0x2f], baseline[0x2f]);  // high byte unchanged
+});
+
+test('buildEditedConfig: alarm checkbox flips alarmFlags bit, preserves others', () => {
+  const baseline = fromHex(FIXTURE_HEX);  // 0x20 = 0x03
+  const edits = parseEditState(baseline);
+  edits.alarmHi.enabled = false;
+  const out = buildEditedConfig(baseline, edits);
+  assert.equal(out[0x20], 0x02);  // bit 0 cleared, bit 1 preserved
+});
+
+test('buildEditedConfig: disabling an alarm leaves threshold bytes intact', () => {
+  // Synthesize a baseline with an active hi alarm and known threshold bytes.
+  const baseline = fromHex(FIXTURE_HEX);
+  baseline[0x20] = 0x01;  // alarm hi enabled
+  baseline.set(new Uint8Array([0x34, 0x32, 0, 0, 0, 0, 0, 0]), 0x70);  // "42"
+  const edits = parseEditState(baseline);
+  edits.alarmHi.enabled = false;
+  const out = buildEditedConfig(baseline, edits);
+  assert.equal(out[0x20] & 0x01, 0);                                     // flag cleared
+  assert.deepEqual(Array.from(out.slice(0x70, 0x78)),                    // bytes preserved
+                   Array.from(baseline.slice(0x70, 0x78)));
 });
