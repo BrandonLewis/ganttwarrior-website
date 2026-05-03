@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -357,77 +358,85 @@
     WebUSB API is not available in this browser. Use Chrome, Edge, or Opera. The page must be loaded over HTTPS or from localhost.
   </div>
 
-  <!-- ── DEVICE ────────────────────────────────────────── -->
+  <!-- ── DEVICE CONFIGURATION (top) ──────────────────────── -->
   <section class="panel">
-    <div class="panel-head">
-      <span>device</span>
-      <span class="meta" id="device-info">no device</span>
+    <div class="panel-head"><span>device configuration</span><span class="meta" id="cfg-meta">connect to populate</span></div>
+    <div class="panel-body">
+      <div class="kv" id="config-kv">
+        <div class="k">device type</div><div class="v" id="ro-device-type"><span class="dim">·</span></div>
+        <div class="k">device name</div>
+        <div class="v"><input id="edit-name" type="text" maxlength="16" disabled> <span class="dim" id="edit-name-count">0/16</span></div>
+        <div class="k">serial number</div><div class="v" id="ro-serial"><span class="dim">·</span></div>
+        <div class="k">firmware</div><div class="v" id="ro-firmware"><span class="dim">·</span></div>
+        <div class="k">unit</div>
+        <div class="v"><select id="edit-unit" disabled><option value="F">°F</option><option value="C">°C</option></select></div>
+        <div class="k">sample interval</div>
+        <div class="v"><select id="edit-interval" disabled></select></div>
+        <div class="k">delayed start</div>
+        <div class="v">
+          <label><input type="radio" name="edit-delay-mode" value="immediate" disabled> Immediate start</label>
+          <label style="margin-left:12px"><input type="radio" name="edit-delay-mode" value="delayed" disabled> Delay the start</label>
+          <div id="edit-delay-fields" style="margin-top:6px;margin-left:18px" hidden>
+            <input id="edit-delay-date" type="date" disabled>
+            <input id="edit-delay-time" type="time" step="1" disabled>
+            <span id="edit-delay-hint" class="dim" style="margin-left:8px"></span>
+          </div>
+        </div>
+        <div class="k">temp alarm hi</div>
+        <div class="v"><label><input id="edit-alarm-hi-on" type="checkbox" disabled> alarm on hi</label>
+          <input id="edit-alarm-hi-value" type="number" step="0.1" disabled style="width:80px;margin-left:10px"> <span class="dim" id="edit-alarm-hi-unit">°F</span></div>
+        <div class="k">temp alarm lo</div>
+        <div class="v"><label><input id="edit-alarm-lo-on" type="checkbox" disabled> alarm on lo</label>
+          <input id="edit-alarm-lo-value" type="number" step="0.1" disabled style="width:80px;margin-left:10px"> <span class="dim" id="edit-alarm-lo-unit">°F</span></div>
+        <div class="k">sample count</div><div class="v" id="ro-sample-count"><span class="dim">·</span></div>
+        <div class="k">last start timestamp</div><div class="v" id="ro-start-ts"><span class="dim">·</span></div>
+        <div class="k">cal1 / cal2</div><div class="v" id="ro-cal"><span class="dim">·</span></div>
+        <div class="k">alarm flags / status flags</div><div class="v" id="ro-flags"><span class="dim">·</span></div>
+      </div>
+
+      <div id="edit-warning" hidden style="margin-top:14px;padding:10px;background:#2a1a0a;border:1px solid #6a4a1a;border-radius:4px;color:#f0a050">
+        ⚠ <strong><span id="edit-change-count">0 fields modified</span></strong> — writes to flash<br>
+        <span id="edit-diff-text" style="font-size:11px;color:#caa080"></span>
+        <div style="margin-top:8px"><button id="btn-discard" class="ghost">Discard changes</button></div>
+      </div>
     </div>
+  </section>
+
+  <!-- ── MAIN ACTIONS ─────────────────────────────────────── -->
+  <section class="panel">
+    <div class="panel-body">
+      <div class="actions">
+        <button id="btn-conn-toggle" class="primary">Connect</button>
+        <button id="btn-setup-start">Setup &amp; Start</button>
+        <button id="btn-download-resume">Download &amp; Resume</button>
+        <button id="btn-stop-logging">Stop Logging</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ADVANCED (collapsed by default) ──────────────────── -->
+  <details class="panel" id="advanced-section">
+    <summary class="panel-head" style="cursor:pointer"><span>advanced</span><span class="meta">device info, manual commands, raw data, log</span></summary>
     <div class="panel-body">
       <div class="kv" style="margin-bottom:14px">
+        <div class="k">device</div><div class="v" id="device-info">no device</div>
         <div class="k">vendor id</div><div class="v"><span class="accent">0x10C4</span> · Silicon Labs (Cygnal)</div>
         <div class="k">product id</div><div class="v"><span class="accent">0x0002</span> · F32x USBXpress</div>
         <div class="k">interface class</div><div class="v">vendor-specific (not HID, not CDC)</div>
         <div class="k">endpoints</div><div class="v">EP <span class="accent">0x02</span> OUT bulk · EP <span class="accent">0x82</span> IN bulk · 64 B max</div>
       </div>
-      <div class="actions">
-        <button id="btn-connect" class="primary">Connect</button>
-        <button id="btn-disconnect" class="ghost">Disconnect</button>
-      </div>
-    </div>
-  </section>
 
-  <!-- ── ACTIONS ────────────────────────────────────────── -->
-  <section class="panel">
-    <div class="panel-head"><span>protocol</span><span class="meta">three commands per the sigrok wiki</span></div>
-    <div class="panel-body">
-      <div class="actions">
-        <button id="btn-read-sensor" class="primary" title="Initialize → load config → download samples → export CSV. Read-only — touches no flash. Sensor will need an EasyLog reset later before it can resume logging.">Read sensor → CSV</button>
+      <div class="actions" style="margin-bottom:18px">
         <button id="btn-load-config">Load Config &nbsp;<span style="color:var(--fg-3);font-weight:400">[00 FF FF]</span></button>
-        <button id="btn-download">Download Samples &nbsp;<span style="color:var(--fg-3);font-weight:400">[03 FF FF]</span></button>
+        <button id="btn-read-sensor" title="Stop logging, download samples, export CSV. Stopping is required — Downloading from a logging device leaves the firmware stuck and forces a battery pull. After this runs, click Setup &amp; Start to begin a new logging session.">Read sensor → CSV</button>
         <button id="btn-export" class="ghost">Export CSV</button>
         <button id="btn-clear-log" class="ghost">Clear Log</button>
       </div>
-      <div class="actions" style="border-top:1px dashed var(--border);padding-top:8px;margin-top:6px">
-        <span style="color:var(--orange);font-size:11px;font-family:var(--mono)">⚠ writes flash · armed pending hardware verification of the per-command vendor envelope. Verify Load + Download work cleanly across a Disconnect first.</span>
-        <button id="btn-read-and-restart" class="ghost" title="Atomic: load → download → CSV → restart logging. Touches flash; verify metadata after with EasyLog or another Load Config.">Read &amp; Restart</button>
-        <button id="btn-restart-logging" class="ghost" title="Save Config with sampleCount=0 + new start timestamp + status bit 0 set. Requires a prior Load Config so we have the current 256-byte block to modify.">Restart Logging</button>
-      </div>
-    </div>
-  </section>
 
-  <!-- ── CONFIG ────────────────────────────────────────── -->
-  <section class="panel">
-    <div class="panel-head"><span>device configuration</span><span class="meta" id="cfg-meta">load config to populate</span></div>
-    <div class="panel-body">
-      <div class="kv" id="config-kv">
-        <div class="k">device type</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">device name</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">serial number</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">firmware</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">unit</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">sample interval</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">sample count</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">start timestamp</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">delayed start</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">alarm flags</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">status flags</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">temp alarm hi/lo</div><div class="v"><span class="dim">·</span></div>
-        <div class="k">cal1 / cal2 (f32)</div><div class="v"><span class="dim">·</span></div>
-      </div>
-    </div>
-  </section>
+      <div class="panel-head" style="border:0;padding:0;margin-bottom:6px"><span>raw sample memory</span><span class="meta" id="hex-meta">no data · download samples</span></div>
+      <pre class="hex" id="hexdump"><span class="ofs">0000</span>  <span style="color:var(--fg-4)">— no data —</span></pre>
 
-  <!-- ── HEX DUMP ──────────────────────────────────────── -->
-  <section class="panel">
-    <div class="panel-head"><span>raw sample memory</span><span class="meta" id="hex-meta">no data · download samples</span></div>
-    <pre class="hex" id="hexdump"><span class="ofs">0000</span>  <span style="color:var(--fg-4)">— no data —</span></pre>
-  </section>
-
-  <!-- ── DECODED SAMPLES ──────────────────────────────── -->
-  <section class="panel">
-    <div class="panel-head"><span>decoded samples</span><span class="meta" id="samples-meta">·</span></div>
-    <div class="panel-body tight">
+      <div class="panel-head" style="border:0;padding:0;margin-top:18px;margin-bottom:6px"><span>decoded samples</span><span class="meta" id="samples-meta">·</span></div>
       <div class="decoder-row">
         <label for="decoder">decoder</label>
         <select id="decoder">
@@ -449,27 +458,30 @@
           </tbody>
         </table>
       </div>
-    </div>
-  </section>
 
-  <!-- ── LOG ───────────────────────────────────────────── -->
-  <section class="panel">
-    <div class="panel-head"><span>session log</span><span class="meta">tx ↔ rx · transfers</span></div>
-    <div class="log" id="log"></div>
-  </section>
+      <div class="panel-head" style="border:0;padding:0;margin-top:18px;margin-bottom:6px"><span>session log</span><span class="meta">tx ↔ rx · transfers</span></div>
+      <div class="log" id="log"></div>
+    </div>
+  </details>
 
   <footer class="note">
-    <strong style="color:var(--fg-2)">how to run</strong> · WebUSB requires HTTPS or localhost (file:// is hit-or-miss).
-    From the directory containing this file: <code>python3 -m http.server 8000</code> &nbsp;then open <code>http://localhost:8000/el-usb-tc-spike.html</code> in Chrome / Edge.<br>
-    <strong style="color:var(--fg-2)">first run</strong> · plug in the EL-USB-TC, click <code>Connect</code>, pick the device from the Chrome dialog, click <code>Load Config</code>, then <code>Download Samples</code>.
-    On Linux you may need a udev rule: <code>SUBSYSTEM=="usb",ATTRS{idVendor}=="10c4",ATTRS{idProduct}=="0002",MODE="0666"</code> in <code>/etc/udev/rules.d/99-lascar.rules</code> then <code>sudo udevadm control --reload</code>.<br>
-    <strong style="color:var(--fg-2)">sample decoder</strong> · the sigrok wiki documents the 3-command protocol but not the per-sample byte format for the -TC variant. The dropdown lets you swap candidates; the most common pattern for thermocouple loggers in this family is signed 16-bit little-endian × 0.1.
+    <strong style="color:var(--fg-2)">first run</strong> · plug in the EL-USB-TC, click <code>Connect</code>, pick the device from the Chrome dialog. Configuration loads automatically; the workflow buttons enable once it does.<br>
+    <strong style="color:var(--fg-2)">linux udev</strong> · <code>SUBSYSTEM=="usb",ATTRS{idVendor}=="10c4",ATTRS{idProduct}=="0002",MODE="0666"</code> in <code>/etc/udev/rules.d/99-lascar.rules</code> then <code>sudo udevadm control --reload</code>.
   </footer>
 
 </main>
 
-<script>
-"use strict";
+<script type="module">
+import {
+  SAMPLE_INTERVAL_PRESETS,
+  MAX_SAMPLES,
+  parseEditState,
+  buildEditedConfig,
+  applyWorkflowDeltas,
+  computeDiff,
+  fillDurationLabel,
+  relativeTimeLabel,
+} from "{% static 'js/monitor-encoding.mjs' %}";
 
 // ───────────────────────────────────────────────────────────
 //  protocol constants
@@ -523,14 +535,23 @@ function log(msg, kind = 'info') {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-function enableConnected(connected) {
-  $('btn-disconnect').disabled = !connected;
+function refreshButtonStates() {
+  const connected = !!device;
+  const haveConfig = !!lastConfig?.raw;
   $('btn-load-config').disabled = !connected || busy;
-  $('btn-download').disabled = !connected || busy;
-  $('btn-read-sensor').disabled = !connected || busy;
-  $('btn-read-and-restart').disabled = !connected || busy;
-  $('btn-restart-logging').disabled = !connected || busy;
-  $('btn-connect').disabled = connected;
+  $('btn-read-sensor').disabled = !connected || busy || !haveConfig;
+  $('btn-setup-start').disabled = !connected || busy || !haveConfig;
+  $('btn-download-resume').disabled = !connected || busy || !haveConfig;
+  $('btn-stop-logging').disabled = !connected || busy || !haveConfig;
+}
+
+function enableConnected(connected) {
+  // Single toggle button; flip its label and visual weight.
+  const btn = $('btn-conn-toggle');
+  btn.textContent = connected ? 'Disconnect' : 'Connect';
+  btn.classList.toggle('primary', !connected);
+  btn.classList.toggle('ghost', connected);
+  refreshButtonStates();
 }
 
 function setBusy(b) {
@@ -538,11 +559,7 @@ function setBusy(b) {
   // can't allow concurrent transferIn loops on the same endpoint —
   // they'd steal each other's packets and produce scrambled responses.
   busy = b;
-  $('btn-load-config').disabled = !device || busy;
-  $('btn-download').disabled = !device || busy;
-  $('btn-read-sensor').disabled = !device || busy;
-  $('btn-read-and-restart').disabled = !device || busy;
-  $('btn-restart-logging').disabled = !device || busy;
+  refreshButtonStates();
 }
 
 // ───────────────────────────────────────────────────────────
@@ -596,7 +613,13 @@ async function connect() {
     setStatus('err', 'error');
     setTimeout(() => setStatus('', 'disconnected'), 2000);
     device = null;
+    return;
   }
+  // Auto-load config so the device-configuration card populates immediately
+  // after connect. Without this the user has to dig into Advanced for the
+  // Load Config button before any of the workflow buttons enable.
+  try { await loadConfig(); }
+  catch (err) { log(`auto-load after connect failed: ${err.message}`, 'warn'); }
 }
 
 async function disconnect() {
@@ -654,7 +677,10 @@ async function withCommandEnvelope(label, inner) {
 }
 
 async function sendCmd(bytes) {
-  await clearEndpoints();
+  // No CLEAR_FEATURE(ENDPOINT_HALT) here — EasyLog never issues one between
+  // commands, and on this firmware the extra control transfers appear to
+  // discard session state (visible as Download & Resume leaving 0x21=0x01).
+  // Halts are cleared once at connect time only.
   log(`→ TX EP${hex2(EP_OUT)}  ${bytesHex(bytes)}`, 'cmd');
   const r = await device.transferOut(EP_OUT, bytes);
   if (r.status !== 'ok') throw new Error('transferOut: ' + r.status);
@@ -807,23 +833,149 @@ const DECODERS = {
 };
 
 // ───────────────────────────────────────────────────────────
+//  edit-form helpers
+// ───────────────────────────────────────────────────────────
+let baselineEditState = null;  // last loaded EditState (for diff and discard)
+
+function populateIntervalDropdown(currentSec = null) {
+  const sel = document.getElementById('edit-interval');
+  sel.innerHTML = '';
+  const presetSeconds = new Set(SAMPLE_INTERVAL_PRESETS.map(p => p.seconds));
+  for (const p of SAMPLE_INTERVAL_PRESETS) {
+    const opt = document.createElement('option');
+    opt.value = String(p.seconds);
+    opt.textContent = `${p.label}  (${fillDurationLabel(p.seconds)})`;
+    sel.appendChild(opt);
+  }
+  // If the device's current interval isn't in our preset list, surface it
+  // as a one-off option so populateEditForm can faithfully select it. Without
+  // this, `select.value = "5"` against a list with no `5` silently leaves
+  // the select blank — and the next save reads parseInt("") → NaN → throw.
+  if (currentSec !== null && !presetSeconds.has(currentSec)) {
+    const opt = document.createElement('option');
+    opt.value = String(currentSec);
+    opt.textContent = `${currentSec} sec  (device current · non-preset)`;
+    sel.appendChild(opt);
+  }
+}
+
+function populateEditForm(configBlock) {
+  const st = parseEditState(configBlock);
+  baselineEditState = st;
+
+  document.getElementById('edit-name').value = st.deviceName;
+  document.getElementById('edit-name-count').textContent = `${st.deviceName.length}/16`;
+  document.getElementById('edit-unit').value = st.unitIsF ? 'F' : 'C';
+  // Rebuild the dropdown so the device's current value is always selectable,
+  // even if it isn't one of the preset values.
+  populateIntervalDropdown(st.sampleIntervalSec);
+  document.getElementById('edit-interval').value = String(st.sampleIntervalSec);
+
+  const isImmediate = st.delayedStartSec === 0;
+  document.querySelector('input[name="edit-delay-mode"][value="immediate"]').checked = isImmediate;
+  document.querySelector('input[name="edit-delay-mode"][value="delayed"]').checked = !isImmediate;
+  document.getElementById('edit-delay-fields').hidden = isImmediate;
+
+  document.getElementById('edit-alarm-hi-on').checked = st.alarmHi.enabled;
+  document.getElementById('edit-alarm-hi-value').value = st.alarmHi.value;
+  document.getElementById('edit-alarm-lo-on').checked = st.alarmLo.enabled;
+  document.getElementById('edit-alarm-lo-value').value = st.alarmLo.value;
+
+  // Enable inputs (they start disabled when no device is connected)
+  for (const id of ['edit-name', 'edit-unit', 'edit-interval',
+                    'edit-alarm-hi-on', 'edit-alarm-hi-value',
+                    'edit-alarm-lo-on', 'edit-alarm-lo-value']) {
+    document.getElementById(id).disabled = false;
+  }
+  for (const r of document.querySelectorAll('input[name="edit-delay-mode"]')) r.disabled = false;
+  for (const id of ['edit-delay-date', 'edit-delay-time']) {
+    document.getElementById(id).disabled = isImmediate;
+  }
+
+  // Workflow buttons enable once a config baseline exists.
+  refreshButtonStates();
+}
+
+function getCurrentEditState() {
+  const delayMode = document.querySelector('input[name="edit-delay-mode"]:checked')?.value;
+  let delayedStartSec = 0;
+  if (delayMode === 'delayed') {
+    const date = document.getElementById('edit-delay-date').value;  // "2026-05-04"
+    const time = document.getElementById('edit-delay-time').value;  // "08:00:00" (always 24h)
+    if (date && time) {
+      const target = new Date(`${date}T${time.length === 5 ? time + ':00' : time}`);
+      delayedStartSec = Math.max(0, Math.floor((target.getTime() - Date.now()) / 1000));
+    }
+  }
+  return {
+    deviceName: document.getElementById('edit-name').value,
+    unitIsF: document.getElementById('edit-unit').value === 'F',
+    sampleIntervalSec: parseInt(document.getElementById('edit-interval').value, 10),
+    delayedStartSec,
+    alarmHi: {
+      enabled: document.getElementById('edit-alarm-hi-on').checked,
+      value: parseFloat(document.getElementById('edit-alarm-hi-value').value) || 0,
+    },
+    alarmLo: {
+      enabled: document.getElementById('edit-alarm-lo-on').checked,
+      value: parseFloat(document.getElementById('edit-alarm-lo-value').value) || 0,
+    },
+  };
+}
+
+function updateWarningBar() {
+  const bar = document.getElementById('edit-warning');
+  const discard = document.getElementById('btn-discard');
+  if (!baselineEditState) {
+    bar.hidden = true;
+    discard.hidden = true;
+    document.getElementById('edit-delay-hint').textContent = '';
+    return;
+  }
+  const current = getCurrentEditState();
+  const diff = computeDiff(baselineEditState, current);
+  // Always update the delayed-start hint, even when nothing is dirty.
+  document.getElementById('edit-delay-hint').textContent =
+    current.delayedStartSec > 0 ? relativeTimeLabel(current.delayedStartSec) : '';
+  if (diff.length === 0) {
+    bar.hidden = true;
+    discard.hidden = true;
+    return;
+  }
+  bar.hidden = false;
+  discard.hidden = false;
+  document.getElementById('edit-change-count').textContent =
+    `${diff.length} field${diff.length === 1 ? '' : 's'} modified`;
+  document.getElementById('edit-diff-text').textContent =
+    diff.map(d => `${d.field}: ${d.before} → ${d.after}`).join(' · ');
+}
+
+// ───────────────────────────────────────────────────────────
 //  high-level operations
 // ───────────────────────────────────────────────────────────
+// Inner: assumes the caller already owns the busy lock. Used by both the
+// button-handler `loadConfig` and `runWorkflow` (which keeps busy held
+// across save → re-load).
+async function loadConfigInner() {
+  setStatus('busy', 'loading config…');
+  log('── LOAD CONFIG ──', 'cmd');
+  await withCommandEnvelope('Load Config', async () => {
+    await sendCmd(new Uint8Array([0x00, 0xFF, 0xFF]));
+    const buf = await readFramed();
+    log(`config received · ${buf.length} bytes`, 'ok');
+    lastConfig = parseConfig(buf);
+    renderConfig(lastConfig);
+    populateEditForm(buf);
+  });
+  setStatus('on', `connected · ${lastConfig.deviceTypeName}`);
+}
+
 async function loadConfig() {
   if (!device) return;
   if (busy) { log('command already in flight — wait for it to finish or click Disconnect', 'warn'); return; }
   setBusy(true);
   try {
-    setStatus('busy', 'loading config…');
-    log('── LOAD CONFIG ──', 'cmd');
-    await withCommandEnvelope('Load Config', async () => {
-      await sendCmd(new Uint8Array([0x00, 0xFF, 0xFF]));
-      const buf = await readFramed();
-      log(`config received · ${buf.length} bytes`, 'ok');
-      lastConfig = parseConfig(buf);
-      renderConfig(lastConfig);
-    });
-    setStatus('on', `connected · ${lastConfig.deviceTypeName}`);
+    await loadConfigInner();
   } catch (err) {
     log(`loadConfig: ${err.message}`, 'error');
     setStatus('err', 'error');
@@ -832,32 +984,18 @@ async function loadConfig() {
   }
 }
 
-async function downloadSamples() {
-  if (!device) return;
-  if (busy) { log('command already in flight — wait for it to finish or click Disconnect', 'warn'); return; }
-  if (!lastConfig) {
-    log('load config first — need sample count and interval to interpret data', 'warn');
-    return;
-  }
-  setBusy(true);
-  try {
-    setStatus('busy', 'downloading…');
-    log('── DOWNLOAD SAMPLES ──', 'cmd');
-    await withCommandEnvelope('Download Samples', async () => {
-      await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
-      const buf = await readFramed();
-      log(`samples received · ${buf.length} bytes`, 'ok');
-      lastSampleBytes = buf;
-      renderHexDump(buf);
-      decodeAndRender();
-    });
-    setStatus('on', `connected · ${lastConfig.sampleCount} samples`);
-  } catch (err) {
-    log(`downloadSamples: ${err.message}`, 'error');
-    setStatus('err', 'error');
-  } finally {
-    setBusy(false);
-  }
+async function downloadSamplesInner() {
+  setStatus('busy', 'downloading…');
+  log('── DOWNLOAD SAMPLES ──', 'cmd');
+  await withCommandEnvelope('Download Samples', async () => {
+    await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
+    const buf = await readFramed();
+    log(`samples received · ${buf.length} bytes`, 'ok');
+    lastSampleBytes = buf;
+    renderHexDump(buf);
+    decodeAndRender();
+  });
+  setStatus('on', `connected · ${lastConfig.sampleCount} samples`);
 }
 
 // ───────────────────────────────────────────────────────────
@@ -915,44 +1053,6 @@ async function saveConfig(modifiedBytes) {
   await withCommandEnvelope('Save Config', () => saveConfigInner(modifiedBytes));
 }
 
-async function restartLogging() {
-  // Throws on failure so callers (atomicRead) can react. The standalone
-  // button handler wraps this in its own try/catch for UI feedback.
-  if (!device) throw new Error('not connected');
-  if (busy) throw new Error('command in flight, wait');
-  if (!lastConfig?.raw) {
-    throw new Error('load config first — restart needs the current config block to modify');
-  }
-  setBusy(true);
-  try {
-    log('── RESTART LOGGING ──', 'cmd');
-    const cfg = new Uint8Array(lastConfig.raw);  // copy
-
-    const now = new Date();
-    cfg[0x12] = now.getHours();
-    cfg[0x13] = now.getMinutes();
-    cfg[0x14] = now.getSeconds();
-    cfg[0x15] = now.getDate();
-    cfg[0x16] = now.getMonth() + 1;
-    cfg[0x17] = now.getFullYear() - 2000;
-
-    // delayedStartSec = 0 (4-byte LE u32 at 0x18)
-    cfg[0x18] = cfg[0x19] = cfg[0x1a] = cfg[0x1b] = 0;
-    // sampleCount = 0 (2-byte LE u16 at 0x1e)
-    cfg[0x1e] = cfg[0x1f] = 0;
-    // statusFlags at 0x21: bit 0 is the logging-active flag (per the
-    // EasyLog Win32 USBPcap capture — sigrok wiki said bit 4, observed
-    // bytes say bit 0). Keep other bits intact.
-    cfg[0x21] = (cfg[0x21] | 0x01);
-
-    log(`new start = ${now.toString().slice(0, 24)} · sampleCount → 0 · status 0x${hex2(cfg[0x21])}`);
-    await saveConfig(cfg);
-    log('✓ logging restart sent · verify by Disconnect → reconnect → Load Config', 'ok');
-  } finally {
-    setBusy(false);
-  }
-}
-
 function decodeAndRender() {
   if (!lastSampleBytes || !lastConfig) return;
   const key = $('decoder').value;
@@ -983,31 +1083,48 @@ function decodeAndRender() {
 //  rendering
 // ───────────────────────────────────────────────────────────
 function renderConfig(c) {
+  // Update only the read-only `ro-*` cells; the editable inputs are siblings
+  // in the same #config-kv grid and must be left alone (overwriting
+  // #config-kv's innerHTML would destroy them and break populateEditForm).
   const fmt = (v, suffix = '') => {
     if (v === null || v === undefined || v === '') return '<span class="dim">·</span>';
     return String(v) + suffix;
   };
   const accent = (v) => `<span class="accent">${v}</span>`;
+  const startTsHtml = c.startTimestamp?.iso
+    ? `${accent(c.startTimestamp.iso)} <span class="raw">(raw ${c.startTimestamp.rawHex})</span>`
+    : `<span class="dim">·</span> <span class="raw">(raw ${c.startTimestamp?.rawHex ?? ''})</span>`;
+  // Empirical state map for byte 0x21. Bit 0 is host-set ("armed"); bit 1
+  // is sensor-set ("recording"). The host writes 0x01 in setup-and-start;
+  // the sensor flips bit 1 once it actually begins recording, so 0x03 ==
+  // armed + recording.
+  //   0x00 → transient (post-Download)
+  //   0x01 → armed (host wrote it; if delayed, waiting for start time)
+  //   0x02 → idle (post-reset / session ended; not armed)
+  //   0x03 → logging (armed + sensor actively recording)
+  const sf = c.statusFlags ?? 0;
+  const stateLabel =
+    sf === 0x00 ? 'transient' :
+    sf === 0x01 ? 'armed' :
+    sf === 0x02 ? 'idle' :
+    sf === 0x03 ? 'logging' :
+    `unknown 0x${hex2(sf)}`;
+  const flagsHtml =
+    `<span class="raw">alarm 0x${hex2(c.alarmFlags ?? 0)} / status 0x${hex2(sf)}</span>` +
+    ` · ${stateLabel}`;
 
-  const html = [
-    ['device type',        `${accent(c.deviceType)} · ${c.deviceTypeName}`],
-    ['device name',        fmt(c.deviceName)],
-    ['serial number',      accent(fmt(c.serialNumber))],
-    ['firmware',           fmt(c.firmware)],
-    ['unit',               accent('°' + c.unit)],
-    ['sample interval',    `${accent(c.sampleIntervalSec)} <span class="dim">sec</span>`],
-    ['sample count',       `${accent(c.sampleCount)} <span class="dim">/ 32510 max</span>`],
-    ['start timestamp',    c.startTimestamp?.iso
-      ? `${accent(c.startTimestamp.iso)} <span class="raw">(raw ${c.startTimestamp.rawHex})</span>`
-      : `<span class="dim">·</span> <span class="raw">(raw ${c.startTimestamp?.rawHex ?? ''})</span>`],
-    ['delayed start',      `${fmt(c.delayedStartSec, ' sec')}`],
-    ['alarm flags',        `<span class="raw">0x${hex2(c.alarmFlags ?? 0)}</span>`],
-    ['status flags',       `<span class="raw">0x${hex2(c.statusFlags ?? 0)}</span> · logging=${(c.statusFlags & 0x01) ? 'on' : 'off'}`],
-    ['temp alarm hi/lo',   `${c.tempAlarmHi ?? '?'} / ${c.tempAlarmLo ?? '?'} °${c.unit}`],
-    ['cal1 / cal2 (f32)',  `${(c.cal1 ?? 0).toExponential(3)} / ${(c.cal2 ?? 0).toFixed(6)}`],
-  ].map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
+  $('ro-device-type').innerHTML  = `${accent(c.deviceType)} · ${c.deviceTypeName}`;
+  $('ro-serial').innerHTML       = accent(fmt(c.serialNumber));
+  $('ro-firmware').innerHTML     = fmt(c.firmware);
+  $('ro-sample-count').innerHTML = `${accent(c.sampleCount)} <span class="dim">/ 32510 max</span>`;
+  $('ro-start-ts').innerHTML     = startTsHtml;
+  $('ro-cal').innerHTML          = `${(c.cal1 ?? 0).toExponential(3)} / ${(c.cal2 ?? 0).toFixed(6)}`;
+  $('ro-flags').innerHTML        = flagsHtml;
 
-  $('config-kv').innerHTML = html;
+  // Match the °F / °C suffix on the editable alarm-hi/lo rows to the device.
+  $('edit-alarm-hi-unit').textContent = '°' + c.unit;
+  $('edit-alarm-lo-unit').textContent = '°' + c.unit;
+
   $('cfg-meta').textContent = `${c.rawLen} byte struct · type ${c.deviceType}`;
 }
 
@@ -1105,52 +1222,170 @@ function exportCsv() {
 // ───────────────────────────────────────────────────────────
 //  init
 // ───────────────────────────────────────────────────────────
-$('btn-connect').addEventListener('click', connect);
-$('btn-disconnect').addEventListener('click', disconnect);
+$('btn-conn-toggle').addEventListener('click', () => {
+  if (device) disconnect();
+  else connect();
+});
 
-async function atomicRead({ andRestart }) {
-  // Shared atomic-read flow: loadConfig → downloadSamples → exportCsv
-  // → optionally restartLogging. Each leg runs its own vendor envelope.
+async function atomicReadOnly() {
+  // load → SV-stop → download → CSV. The SV-stop is required: Downloading
+  // from a logging (0x21=0x03) device leaves it stuck at 0x21=0x01 with
+  // no software path back (battery pull only). SV-stop transitions a
+  // logging device to 0x21=0x00 (stopped), from which Download is safe.
+  // The device is left stopped after this; user must click Setup & Start
+  // to resume logging.
   if (!device) { log('not connected', 'warn'); return; }
   if (busy) { log('command in flight, wait', 'warn'); return; }
-  log(andRestart ? '── READ + RESTART (atomic) ──' : '── READ SENSOR (atomic) ──', 'cmd');
+  log('── READ SENSOR ──', 'cmd');
+  setBusy(true);
   try {
-    await loadConfig();
+    await loadConfigInner();
     if (!lastConfig) throw new Error('Load Config did not return data');
-    await downloadSamples();
+
+    log('  step 1: stop logging (0x21=0x00)', 'info');
+    const stopPayload = new Uint8Array(lastConfig.raw);
+    stopPayload[0x21] = 0x00;
+    await saveConfig(stopPayload);
+
+    log('  step 2: download samples', 'info');
+    await downloadSamplesInner();
     if (!lastSampleBytes) throw new Error('Download Samples did not return data');
+
     exportCsv();
-    const summary = `sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · ` +
-                    `${lastConfig.sampleCount} samples · CSV exported`;
-    if (andRestart) {
-      await restartLogging();
-      log(`✓ ${summary} · LOGGING RESTARTED · safe to Disconnect & redeploy`, 'ok');
-    } else {
-      log(`✓ ${summary} · safe to Disconnect`, 'ok');
-    }
+    // Reload so the config card reflects the post-stop state (0x21=0x00).
+    await loadConfigInner();
+    log(`✓ sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · CSV exported · device stopped (Setup & Start to resume)`, 'ok');
   } catch (err) {
-    log(`atomic flow failed: ${err.message}`, 'error');
+    log(`read flow failed: ${err.message}`, 'error');
+  } finally {
+    setBusy(false);
   }
 }
 
-$('btn-read-sensor').addEventListener('click', () => atomicRead({ andRestart: false }));
-$('btn-read-and-restart').addEventListener('click', () => atomicRead({ andRestart: true }));
-$('btn-restart-logging').addEventListener('click', async () => {
-  try { await restartLogging(); }
-  catch (err) {
-    log(`restartLogging failed: ${err.message}`, 'error');
-    log('  device state may be uncertain — verify with Load Config before disconnecting', 'warn');
+async function runWorkflow(label, workflow, opts = {}) {
+  if (!device) { log('not connected', 'warn'); return; }
+  if (busy) { log('command in flight, wait', 'warn'); return; }
+  if (!lastConfig?.raw) { log('load config first — need a baseline block', 'warn'); return; }
+  log(`── ${label.toUpperCase()} ──`, 'cmd');
+  setBusy(true);
+  try {
+    if (opts.preDownload) {
+      // Working sequence (verified via pyusb replay): SV-stop → Download
+      // → SV-setup. Order matters. Downloading from a logging device
+      // (0x21=0x03) leaves it stuck at 0x21=0x01 with no software path
+      // back. SV-stop first transitions 0x03 → 0x00 (clean stopped),
+      // making Download safe; the SV-setup that follows transitions
+      // 0x00 → 0x01 → 0x03 honoring sampleCount=0 and the new start
+      // timestamp. Earlier reference captures suggested a different
+      // order with a settling pause — that pattern does not work on
+      // this firmware.
+      log('  step 1: stop logging (0x21=0x00)', 'info');
+      const stopPayload = new Uint8Array(lastConfig.raw);
+      stopPayload[0x21] = 0x00;
+      await saveConfig(stopPayload);
+
+      log('  step 2: download samples + CSV export', 'info');
+      await downloadSamplesInner();
+      exportCsv();
+
+      log('  step 3: load fresh baseline before setup save', 'info');
+      await loadConfigInner();
+    }
+    const edits = getCurrentEditState();
+    const payload = buildEditedConfig(lastConfig.raw, edits);
+    applyWorkflowDeltas(payload, workflow, new Date());
+    await saveConfig(payload);
+    log(`✓ ${label} saved · re-loading config to verify`, 'ok');
+    // Use the inner so we don't trip the outer loadConfig's busy guard —
+    // we already hold busy and will release it in `finally`.
+    await loadConfigInner();
+
+    // The verify reload above catches the device mid-transition: 0x01
+    // (armed, counting down) for delayed starts, or briefly 0x00 for
+    // immediate starts. Schedule one follow-up reload after the
+    // countdown elapses so the panel transitions to 0x03 (logging)
+    // without requiring a manual Load Config. Skipped for Stop Logging.
+    if (workflow === 'setup-and-start' || workflow === 'download-and-resume') {
+      const sf = lastConfig?.statusFlags;
+      const delaySec = lastConfig?.delayedStartSec ?? 0;
+      let waitS = 0;
+      if (sf === 0x01 && delaySec > 0) waitS = delaySec + 2;
+      else if (sf === 0x00 || (sf === 0x01 && delaySec === 0)) waitS = 2;
+      if (waitS > 0) {
+        log(`  scheduling verify reload in ${waitS}s — device should be logging by then`, 'info');
+        setTimeout(() => { if (device && !busy) loadConfig(); }, waitS * 1000);
+      }
+    }
+  } catch (err) {
+    log(`${label} failed: ${err.message}`, 'error');
+    log('  device state may be uncertain — running Load Config to surface what is actually on the device', 'warn');
+    try { await loadConfigInner(); } catch (e) { /* already logged */ }
+  } finally {
+    setBusy(false);
   }
-});
+}
+
+document.getElementById('btn-read-sensor').addEventListener('click', atomicReadOnly);
 $('btn-load-config').addEventListener('click', loadConfig);
-$('btn-download').addEventListener('click', downloadSamples);
 $('btn-export').addEventListener('click', exportCsv);
 $('btn-clear-log').addEventListener('click', () => { logEl.innerHTML = ''; log('log cleared'); });
 $('decoder').addEventListener('change', decodeAndRender);
+document.getElementById('btn-setup-start').addEventListener('click', () =>
+  runWorkflow('Setup & Start', 'setup-and-start'));
+document.getElementById('btn-download-resume').addEventListener('click', () =>
+  runWorkflow('Download & Resume', 'download-and-resume', { preDownload: true }));
+document.getElementById('btn-stop-logging').addEventListener('click', () =>
+  runWorkflow('Stop Logging', 'stop-logging'));
+document.getElementById('btn-discard').addEventListener('click', () => {
+  if (!baselineEditState || !lastConfig?.raw) return;
+  populateEditForm(lastConfig.raw);
+  updateWarningBar();
+  log('discarded pending edits — form back to last-loaded values', 'info');
+});
 
 if (!navigator.usb) {
   $('webusb-warning').hidden = false;
 }
+populateIntervalDropdown();
+const EDIT_INPUT_IDS = [
+  'edit-name', 'edit-unit', 'edit-interval',
+  'edit-delay-date', 'edit-delay-time',
+  'edit-alarm-hi-on', 'edit-alarm-hi-value',
+  'edit-alarm-lo-on', 'edit-alarm-lo-value',
+];
+for (const id of EDIT_INPUT_IDS) {
+  document.getElementById(id).addEventListener('input', updateWarningBar);
+  document.getElementById(id).addEventListener('change', updateWarningBar);
+}
+for (const r of document.querySelectorAll('input[name="edit-delay-mode"]')) {
+  r.addEventListener('change', () => {
+    const delayed = document.querySelector('input[name="edit-delay-mode"]:checked').value === 'delayed';
+    document.getElementById('edit-delay-fields').hidden = !delayed;
+    for (const id of ['edit-delay-date', 'edit-delay-time']) {
+      document.getElementById(id).disabled = !delayed;
+    }
+    // First time switching to Delayed in this session: pre-populate the
+    // date/time inputs with "now + 5 min" so the form is in a valid,
+    // savable state immediately.
+    if (delayed) {
+      const dateEl = document.getElementById('edit-delay-date');
+      const timeEl = document.getElementById('edit-delay-time');
+      if (!dateEl.value || !timeEl.value) {
+        const t = new Date(Date.now() + 5 * 60 * 1000);
+        const yyyy = t.getFullYear();
+        const mm = String(t.getMonth() + 1).padStart(2, '0');
+        const dd = String(t.getDate()).padStart(2, '0');
+        dateEl.value = `${yyyy}-${mm}-${dd}`;
+        timeEl.value = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+      }
+    }
+    updateWarningBar();
+  });
+}
+document.getElementById('edit-name').addEventListener('input', () => {
+  const len = document.getElementById('edit-name').value.length;
+  document.getElementById('edit-name-count').textContent = `${len}/16`;
+});
 enableConnected(false);
 setStatus('', 'disconnected');
 log('ready · plug in EL-USB-TC and click Connect', 'info');
