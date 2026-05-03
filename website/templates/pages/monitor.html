@@ -1307,12 +1307,12 @@ async function runWorkflow(label, workflow, opts = {}) {
       stopPayload[0x21] = 0x00;
       await saveConfig(stopPayload);
 
-      log('  step 4: load config (verify post-stop state)', 'info');
-      await loadConfigInner();
-
+      // Cap 2 has no envelope traffic between SV-stop ACK and the next
+      // Load — just silence. Don't insert a verify-Load here; another
+      // envelope mid-settle appears to interrupt the firmware's recovery.
       await settlingPause(20);
 
-      log('  step 5: load config (final pre-save read)', 'info');
+      log('  step 4: load config (final pre-save read)', 'info');
       await loadConfigInner();
     }
     const edits = getCurrentEditState();
