@@ -1280,13 +1280,15 @@ async function runWorkflow(label, workflow, opts = {}) {
   setBusy(true);
   try {
     if (opts.preDownload) {
-      // Pattern reverse-engineered from pcap reference 3 (which successfully
-      // restarts a sensor post-download without a battery pull):
-      //   Download → Load → ~20s pause → Load → Save (setup-and-start) → Load
-      // The pause is the critical ingredient that earlier attempts missed.
-      // EasyLog's wizard naturally has 15-22s of human-typing-target-time
-      // between the post-DL state and the setup save; the firmware appears
-      // to need that long to settle before it'll honor a new session save.
+      // Cap 2 pattern (frames 371-443) — the closest reference to our case:
+      // device was logging (sf=01), then Download, then restart without
+      // battery pull. EasyLog's full sequence:
+      //   Download → Load → SV-stop (sf=00) → Load → ~18.6s gap → Load → SV-setup
+      // Both the SV-stop AND the pause appear necessary when the device
+      // was logging at start. Cap 3 (post-battery-pull, sf=02 idle) skips
+      // the SV-stop because nothing's actively recording to stop. We mirror
+      // cap 2 here since most users invoke Download & Resume on a sensor
+      // that's currently logging.
       log('  step 1: download samples + CSV export', 'info');
       await withCommandEnvelope('Download Samples', async () => {
         await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
@@ -1300,9 +1302,17 @@ async function runWorkflow(label, workflow, opts = {}) {
       log('  step 2: load config (observe post-download state)', 'info');
       await loadConfigInner();
 
-      await settlingPause(10);
+      log('  step 3: stop-save (write current bytes back with 0x21=0x00)', 'info');
+      const stopPayload = new Uint8Array(lastConfig.raw);
+      stopPayload[0x21] = 0x00;
+      await saveConfig(stopPayload);
 
-      log('  step 3: load config (final pre-save read)', 'info');
+      log('  step 4: load config (verify post-stop state)', 'info');
+      await loadConfigInner();
+
+      await settlingPause(20);
+
+      log('  step 5: load config (final pre-save read)', 'info');
       await loadConfigInner();
     }
     const edits = getCurrentEditState();
