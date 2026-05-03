@@ -358,42 +358,9 @@
     WebUSB API is not available in this browser. Use Chrome, Edge, or Opera. The page must be loaded over HTTPS or from localhost.
   </div>
 
-  <!-- ── DEVICE ────────────────────────────────────────── -->
+  <!-- ── DEVICE CONFIGURATION (top) ──────────────────────── -->
   <section class="panel">
-    <div class="panel-head">
-      <span>device</span>
-      <span class="meta" id="device-info">no device</span>
-    </div>
-    <div class="panel-body">
-      <div class="kv" style="margin-bottom:14px">
-        <div class="k">vendor id</div><div class="v"><span class="accent">0x10C4</span> · Silicon Labs (Cygnal)</div>
-        <div class="k">product id</div><div class="v"><span class="accent">0x0002</span> · F32x USBXpress</div>
-        <div class="k">interface class</div><div class="v">vendor-specific (not HID, not CDC)</div>
-        <div class="k">endpoints</div><div class="v">EP <span class="accent">0x02</span> OUT bulk · EP <span class="accent">0x82</span> IN bulk · 64 B max</div>
-      </div>
-      <div class="actions">
-        <button id="btn-connect" class="primary">Connect</button>
-        <button id="btn-disconnect" class="ghost">Disconnect</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── ACTIONS ────────────────────────────────────────── -->
-  <section class="panel">
-    <div class="panel-head"><span>protocol</span><span class="meta">three commands per the sigrok wiki</span></div>
-    <div class="panel-body">
-      <div class="actions">
-        <button id="btn-read-sensor" class="primary" title="Stop logging, download samples, export CSV. Stopping is required — Downloading from a logging device leaves the firmware stuck and forces a battery pull. After this runs, click Setup &amp; Start to begin a new logging session.">Read sensor → CSV</button>
-        <button id="btn-load-config">Load Config &nbsp;<span style="color:var(--fg-3);font-weight:400">[00 FF FF]</span></button>
-        <button id="btn-export" class="ghost">Export CSV</button>
-        <button id="btn-clear-log" class="ghost">Clear Log</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── CONFIG ────────────────────────────────────────── -->
-  <section class="panel">
-    <div class="panel-head"><span>device configuration</span><span class="meta" id="cfg-meta">load config to populate</span></div>
+    <div class="panel-head"><span>device configuration</span><span class="meta" id="cfg-meta">connect to populate</span></div>
     <div class="panel-body">
       <div class="kv" id="config-kv">
         <div class="k">device type</div><div class="v" id="ro-device-type"><span class="dim">·</span></div>
@@ -430,27 +397,46 @@
       <div id="edit-warning" hidden style="margin-top:14px;padding:10px;background:#2a1a0a;border:1px solid #6a4a1a;border-radius:4px;color:#f0a050">
         ⚠ <strong><span id="edit-change-count">0 fields modified</span></strong> — writes to flash<br>
         <span id="edit-diff-text" style="font-size:11px;color:#caa080"></span>
-      </div>
-
-      <div id="workflow-actions" hidden style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-        <button id="btn-setup-start" class="primary">Setup &amp; Start</button>
-        <button id="btn-download-resume">Download &amp; Resume</button>
-        <button id="btn-stop-logging">Stop Logging</button>
-        <button id="btn-discard" class="ghost" hidden>Discard changes</button>
+        <div style="margin-top:8px"><button id="btn-discard" class="ghost">Discard changes</button></div>
       </div>
     </div>
   </section>
 
-  <!-- ── HEX DUMP ──────────────────────────────────────── -->
+  <!-- ── MAIN ACTIONS ─────────────────────────────────────── -->
   <section class="panel">
-    <div class="panel-head"><span>raw sample memory</span><span class="meta" id="hex-meta">no data · download samples</span></div>
-    <pre class="hex" id="hexdump"><span class="ofs">0000</span>  <span style="color:var(--fg-4)">— no data —</span></pre>
+    <div class="panel-body">
+      <div class="actions">
+        <button id="btn-conn-toggle" class="primary">Connect</button>
+        <button id="btn-setup-start">Setup &amp; Start</button>
+        <button id="btn-download-resume">Download &amp; Resume</button>
+        <button id="btn-stop-logging">Stop Logging</button>
+      </div>
+    </div>
   </section>
 
-  <!-- ── DECODED SAMPLES ──────────────────────────────── -->
-  <section class="panel">
-    <div class="panel-head"><span>decoded samples</span><span class="meta" id="samples-meta">·</span></div>
-    <div class="panel-body tight">
+  <!-- ── ADVANCED (collapsed by default) ──────────────────── -->
+  <details class="panel" id="advanced-section">
+    <summary class="panel-head" style="cursor:pointer"><span>advanced</span><span class="meta">device info, manual commands, raw data, log</span></summary>
+    <div class="panel-body">
+      <div class="kv" style="margin-bottom:14px">
+        <div class="k">device</div><div class="v" id="device-info">no device</div>
+        <div class="k">vendor id</div><div class="v"><span class="accent">0x10C4</span> · Silicon Labs (Cygnal)</div>
+        <div class="k">product id</div><div class="v"><span class="accent">0x0002</span> · F32x USBXpress</div>
+        <div class="k">interface class</div><div class="v">vendor-specific (not HID, not CDC)</div>
+        <div class="k">endpoints</div><div class="v">EP <span class="accent">0x02</span> OUT bulk · EP <span class="accent">0x82</span> IN bulk · 64 B max</div>
+      </div>
+
+      <div class="actions" style="margin-bottom:18px">
+        <button id="btn-load-config">Load Config &nbsp;<span style="color:var(--fg-3);font-weight:400">[00 FF FF]</span></button>
+        <button id="btn-read-sensor" title="Stop logging, download samples, export CSV. Stopping is required — Downloading from a logging device leaves the firmware stuck and forces a battery pull. After this runs, click Setup &amp; Start to begin a new logging session.">Read sensor → CSV</button>
+        <button id="btn-export" class="ghost">Export CSV</button>
+        <button id="btn-clear-log" class="ghost">Clear Log</button>
+      </div>
+
+      <div class="panel-head" style="border:0;padding:0;margin-bottom:6px"><span>raw sample memory</span><span class="meta" id="hex-meta">no data · download samples</span></div>
+      <pre class="hex" id="hexdump"><span class="ofs">0000</span>  <span style="color:var(--fg-4)">— no data —</span></pre>
+
+      <div class="panel-head" style="border:0;padding:0;margin-top:18px;margin-bottom:6px"><span>decoded samples</span><span class="meta" id="samples-meta">·</span></div>
       <div class="decoder-row">
         <label for="decoder">decoder</label>
         <select id="decoder">
@@ -472,21 +458,15 @@
           </tbody>
         </table>
       </div>
-    </div>
-  </section>
 
-  <!-- ── LOG ───────────────────────────────────────────── -->
-  <section class="panel">
-    <div class="panel-head"><span>session log</span><span class="meta">tx ↔ rx · transfers</span></div>
-    <div class="log" id="log"></div>
-  </section>
+      <div class="panel-head" style="border:0;padding:0;margin-top:18px;margin-bottom:6px"><span>session log</span><span class="meta">tx ↔ rx · transfers</span></div>
+      <div class="log" id="log"></div>
+    </div>
+  </details>
 
   <footer class="note">
-    <strong style="color:var(--fg-2)">how to run</strong> · WebUSB requires HTTPS or localhost (file:// is hit-or-miss).
-    From the directory containing this file: <code>python3 -m http.server 8000</code> &nbsp;then open <code>http://localhost:8000/el-usb-tc-spike.html</code> in Chrome / Edge.<br>
-    <strong style="color:var(--fg-2)">first run</strong> · plug in the EL-USB-TC, click <code>Connect</code>, pick the device from the Chrome dialog, click <code>Load Config</code>, then <code>Download Samples</code>.
-    On Linux you may need a udev rule: <code>SUBSYSTEM=="usb",ATTRS{idVendor}=="10c4",ATTRS{idProduct}=="0002",MODE="0666"</code> in <code>/etc/udev/rules.d/99-lascar.rules</code> then <code>sudo udevadm control --reload</code>.<br>
-    <strong style="color:var(--fg-2)">sample decoder</strong> · the sigrok wiki documents the 3-command protocol but not the per-sample byte format for the -TC variant. The dropdown lets you swap candidates; the most common pattern for thermocouple loggers in this family is signed 16-bit little-endian × 0.1.
+    <strong style="color:var(--fg-2)">first run</strong> · plug in the EL-USB-TC, click <code>Connect</code>, pick the device from the Chrome dialog. Configuration loads automatically; the workflow buttons enable once it does.<br>
+    <strong style="color:var(--fg-2)">linux udev</strong> · <code>SUBSYSTEM=="usb",ATTRS{idVendor}=="10c4",ATTRS{idProduct}=="0002",MODE="0666"</code> in <code>/etc/udev/rules.d/99-lascar.rules</code> then <code>sudo udevadm control --reload</code>.
   </footer>
 
 </main>
@@ -555,11 +535,23 @@ function log(msg, kind = 'info') {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-function enableConnected(connected) {
-  $('btn-disconnect').disabled = !connected;
+function refreshButtonStates() {
+  const connected = !!device;
+  const haveConfig = !!lastConfig?.raw;
   $('btn-load-config').disabled = !connected || busy;
-  $('btn-read-sensor').disabled = !connected || busy;
-  $('btn-connect').disabled = connected;
+  $('btn-read-sensor').disabled = !connected || busy || !haveConfig;
+  $('btn-setup-start').disabled = !connected || busy || !haveConfig;
+  $('btn-download-resume').disabled = !connected || busy || !haveConfig;
+  $('btn-stop-logging').disabled = !connected || busy || !haveConfig;
+}
+
+function enableConnected(connected) {
+  // Single toggle button; flip its label and visual weight.
+  const btn = $('btn-conn-toggle');
+  btn.textContent = connected ? 'Disconnect' : 'Connect';
+  btn.classList.toggle('primary', !connected);
+  btn.classList.toggle('ghost', connected);
+  refreshButtonStates();
 }
 
 function setBusy(b) {
@@ -567,8 +559,7 @@ function setBusy(b) {
   // can't allow concurrent transferIn loops on the same endpoint —
   // they'd steal each other's packets and produce scrambled responses.
   busy = b;
-  $('btn-load-config').disabled = !device || busy;
-  $('btn-read-sensor').disabled = !device || busy;
+  refreshButtonStates();
 }
 
 // ───────────────────────────────────────────────────────────
@@ -622,7 +613,13 @@ async function connect() {
     setStatus('err', 'error');
     setTimeout(() => setStatus('', 'disconnected'), 2000);
     device = null;
+    return;
   }
+  // Auto-load config so the device-configuration card populates immediately
+  // after connect. Without this the user has to dig into Advanced for the
+  // Load Config button before any of the workflow buttons enable.
+  try { await loadConfig(); }
+  catch (err) { log(`auto-load after connect failed: ${err.message}`, 'warn'); }
 }
 
 async function disconnect() {
@@ -895,8 +892,8 @@ function populateEditForm(configBlock) {
     document.getElementById(id).disabled = isImmediate;
   }
 
-  // Workflow actions are always available once a config baseline exists.
-  document.getElementById('workflow-actions').hidden = false;
+  // Workflow buttons enable once a config baseline exists.
+  refreshButtonStates();
 }
 
 function getCurrentEditState() {
@@ -1225,8 +1222,10 @@ function exportCsv() {
 // ───────────────────────────────────────────────────────────
 //  init
 // ───────────────────────────────────────────────────────────
-$('btn-connect').addEventListener('click', connect);
-$('btn-disconnect').addEventListener('click', disconnect);
+$('btn-conn-toggle').addEventListener('click', () => {
+  if (device) disconnect();
+  else connect();
+});
 
 async function atomicReadOnly() {
   // load → SV-stop → download → CSV. The SV-stop is required: Downloading
@@ -1253,7 +1252,9 @@ async function atomicReadOnly() {
     if (!lastSampleBytes) throw new Error('Download Samples did not return data');
 
     exportCsv();
-    log(`✓ sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · ${lastConfig.sampleCount} samples · CSV exported · device stopped (Setup & Start to resume)`, 'ok');
+    // Reload so the config card reflects the post-stop state (0x21=0x00).
+    await loadConfigInner();
+    log(`✓ sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · CSV exported · device stopped (Setup & Start to resume)`, 'ok');
   } catch (err) {
     log(`read flow failed: ${err.message}`, 'error');
   } finally {
@@ -1298,6 +1299,23 @@ async function runWorkflow(label, workflow, opts = {}) {
     // Use the inner so we don't trip the outer loadConfig's busy guard —
     // we already hold busy and will release it in `finally`.
     await loadConfigInner();
+
+    // The verify reload above catches the device mid-transition: 0x01
+    // (armed, counting down) for delayed starts, or briefly 0x00 for
+    // immediate starts. Schedule one follow-up reload after the
+    // countdown elapses so the panel transitions to 0x03 (logging)
+    // without requiring a manual Load Config. Skipped for Stop Logging.
+    if (workflow === 'setup-and-start' || workflow === 'download-and-resume') {
+      const sf = lastConfig?.statusFlags;
+      const delaySec = lastConfig?.delayedStartSec ?? 0;
+      let waitS = 0;
+      if (sf === 0x01 && delaySec > 0) waitS = delaySec + 2;
+      else if (sf === 0x00 || (sf === 0x01 && delaySec === 0)) waitS = 2;
+      if (waitS > 0) {
+        log(`  scheduling verify reload in ${waitS}s — device should be logging by then`, 'info');
+        setTimeout(() => { if (device && !busy) loadConfig(); }, waitS * 1000);
+      }
+    }
   } catch (err) {
     log(`${label} failed: ${err.message}`, 'error');
     log('  device state may be uncertain — running Load Config to surface what is actually on the device', 'warn');
