@@ -2,20 +2,21 @@
 """Pyusb replay of cap 2's Download & Resume wire pattern.
 
 Usage:
-  1. In the browser, run Setup & Start so the device is logging (0x21 = 0x03).
-  2. Close the browser tab (release the WebUSB claim).
-  3. Run this script. It will:
+  1. In the browser, run a previous SV-stop so the device is at 0x21 == 0x00
+     (post-stop, not logging). Close the browser tab to release WebUSB.
+  2. Run this script. It will:
        - claim the device via libusb
-       - pre-flight Load to confirm 0x21 == 0x03 (refuse otherwise)
-       - replay cap 2 frames 371-447 byte-for-byte:
-           Download (with envelope) → Load → SV-stop → 18.6s silence →
-           Load → SV-setup (delay = 60s) → verify
-       - print 0x21 immediately after save (expect 0x01) and again after
-         delay + 10s (expect 0x03 with sampleCount climbing)
+       - pre-flight Load to confirm 0x21 == 0x00 (refuse otherwise)
+       - Download from 0x00 and check whether it triggers the stuck 0x01
+         state. If it does, abort (firmware quirk unreachable).
+       - if Download was safe: SV-setup with delay=10s, then poll Load
+         every 3s for delay + 15s and report whether the device reaches
+         0x03 (logging) or sticks at 0x01.
 
-If the device transitions to logging, our JS code is putting different bytes
-on the wire than this script. If it also stays stuck, the firmware quirk is
-not reachable from software and we drop the combined Download & Resume flow.
+If the device reaches 0x03, the clean software path SV-stop → Download →
+SV-setup works and we can replace the JS Download button with a combined
+Stop / Download / Resume workflow. If it sticks at 0x01, the firmware quirk
+is not reachable from software and we drop the combined flow.
 """
 import sys
 import time
@@ -264,16 +265,6 @@ def main():
         print("→ Need a different post-Download save sequence. Iterate.")
     else:
         print(f"UNEXPECTED — final status=0x{final_sf:02x}, sampleCount={final_sc}.")
-
-    print()
-    if sf == 0x03 and sc > 0:
-        print(f"SUCCESS — device transitioned to logging (0x03), sampleCount={sc}")
-        print("→ Conclusion: pyusb-replay works. Our JS Chrome WebUSB output diverges.")
-    elif sf == 0x01:
-        print("FAILURE — device stuck at armed (0x01) after delay elapsed.")
-        print("→ Conclusion: firmware quirk not reachable from software. Drop combined flow.")
-    else:
-        print(f"UNEXPECTED — status=0x{sf:02x}, sampleCount={sc}")
 
     usb.util.release_interface(dev, intf)
 

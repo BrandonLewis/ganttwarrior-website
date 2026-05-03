@@ -52,7 +52,7 @@ test('SAMPLE_INTERVAL_PRESETS: every value fits in uint16', () => {
   }
 });
 
-test('fillDurationLabel: a 1-min interval at 32510 samples is ~22d 14h', () => {
+test('fillDurationLabel: a 1-min interval at 32510 samples is 22d 13h', () => {
   assert.equal(fillDurationLabel(60), '22d 13h');
   assert.equal(fillDurationLabel(1),  '9h 1m');
   assert.equal(fillDurationLabel(43200), '16255d');  // 12h interval, days only
@@ -183,6 +183,15 @@ test('parseEditState: extracts editable fields from a real config block', () => 
   assert.equal(st.unitIsF, true);          // 0x2E = 0x21, bit 0 set → °F
   assert.equal(st.sampleIntervalSec, 5);   // 0x1C-0x1D = 05 00
   assert.equal(st.delayedStartSec, 0);     // 0x18-0x1B = 00 00 00 00
+  assert.equal(st.delayMode, 'immediate'); // delaySec === 0 → immediate
+});
+
+test('parseEditState: non-zero delay yields delayMode "delayed"', () => {
+  const buf = fromHex(FIXTURE_HEX);
+  buf[0x18] = 60; buf[0x19] = 0; buf[0x1a] = 0; buf[0x1b] = 0;  // 60s
+  const st = parseEditState(buf);
+  assert.equal(st.delayedStartSec, 60);
+  assert.equal(st.delayMode, 'delayed');
 });
 
 test('parseEditState: alarmFlags bits become alarm.enabled', () => {
@@ -363,8 +372,18 @@ test('computeDiff: multiple changes → multiple entries in stable order', () =>
   assert.deepEqual(fields, ['deviceName', 'unitIsF', 'sampleIntervalSec']);
 });
 
-test('computeDiff: delayedStartSec change is intentionally NOT diffed (firmware-mutated)', () => {
+test('computeDiff: delayedStartSec change alone is intentionally NOT diffed (firmware-mutated, drifts every second)', () => {
   const baseline = parseEditState(fromHex(FIXTURE_HEX));
-  const current = { ...baseline, delayedStartSec: 9999 };
+  const current = { ...baseline, delayedStartSec: 9999 };  // delayMode unchanged
   assert.deepEqual(computeDiff(baseline, current), []);
+});
+
+test('computeDiff: delayMode change (immediate ↔ delayed) IS diffed', () => {
+  const baseline = parseEditState(fromHex(FIXTURE_HEX));   // immediate
+  const current = { ...baseline, delayMode: 'delayed', delayedStartSec: 60 };
+  const diff = computeDiff(baseline, current);
+  assert.equal(diff.length, 1);
+  assert.equal(diff[0].field, 'delayMode');
+  assert.equal(diff[0].before, 'immediate');
+  assert.equal(diff[0].after, 'delayed');
 });

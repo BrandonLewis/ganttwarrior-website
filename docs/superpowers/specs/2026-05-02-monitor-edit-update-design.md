@@ -1,5 +1,15 @@
 # Monitor — edit & update user-writable EL-USB-TC config
 
+> **Historical / pre-implementation design.** This document captures the
+> design as it stood before implementation began. The shipped architecture
+> diverged: encoding/parsing was extracted into a pure, testable module
+> (`website/static/js/monitor-encoding.mjs` + `monitor-encoding.test.mjs`),
+> a pyusb replay harness landed under `scripts/replay_download_resume.py`,
+> and the implementation/handoff notes were tracked separately under
+> `docs/superpowers/plans/` and `docs/superpowers/handoff/`. The
+> "single-file change" framing below describes intent at planning time, not
+> the final shape on `main`.
+
 **Date:** 2026-05-02
 **File touched:** `website/templates/pages/monitor.html` (single-file change)
 **Predecessor:** commit `4bd81fa` (per-command vendor envelope around Load / Download / Save Config)

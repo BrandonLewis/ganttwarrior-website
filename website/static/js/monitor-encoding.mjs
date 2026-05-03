@@ -131,6 +131,7 @@ export function parseEditState(buf) {
     unitIsF: (unitWord & 0x01) !== 0,
     sampleIntervalSec: intervalSec,
     delayedStartSec: delaySec,
+    delayMode: delaySec === 0 ? 'immediate' : 'delayed',
     alarmHi: { enabled: (alarmFlags & 0x01) !== 0, value: Number.isFinite(hi) ? hi : 0 },
     alarmLo: { enabled: (alarmFlags & 0x02) !== 0, value: Number.isFinite(lo) ? lo : 0 },
   };
@@ -205,17 +206,21 @@ export function applyWorkflowDeltas(payload, workflow, now) {
   }
 }
 
-// Note: delayedStartSec is intentionally NOT in the diff list. The firmware
-// appears to consume the value into an internal countdown timer and zero
-// the on-disk field after each save, so parseEditState reads back 0 even
-// though the device is still ticking. Meanwhile the form recomputes the
-// value live as (target − now), which drifts every second. Including it
-// produced a permanent fake-dirty diff post-save. The date/time inputs are
-// already visible to the user; the workflow buttons are always available.
+// Note: delayedStartSec itself is intentionally NOT in the diff list. The
+// firmware consumes the value into an internal countdown timer and zeros the
+// on-disk field after each save, so parseEditState reads back 0 even though
+// the device is still ticking. Meanwhile the form recomputes the value live
+// as (target − now), which drifts every second — including it produced a
+// permanent fake-dirty diff post-save. We diff `delayMode` instead, which is
+// stable: 'immediate' when delaySec is 0, 'delayed' otherwise. That catches
+// the immediate↔delayed transition (the primary edit pattern) without the
+// drift problem. Within delayed mode, the live "in Xh Xm" hint and the
+// always-available workflow buttons cover date/time tweaks.
 const DIFF_FIELDS = [
   'deviceName',
   'unitIsF',
   'sampleIntervalSec',
+  'delayMode',
   'alarmHi.enabled',
   'alarmHi.value',
   'alarmLo.enabled',

@@ -757,7 +757,10 @@ function parseConfig(buf) {
     statusFlags:       safe(dv.getUint8, 0x21),
     cal1:              safe(dv.getFloat32, 0x24, true),
     cal2:              safe(dv.getFloat32, 0x28, true),
-    unit:              safe(dv.getUint16, 0x2e, true) === 0 ? 'C' : 'F',
+    // Unit is bit 0 of the uint16 at 0x2e — other bits may be non-zero
+    // (capture shows 0x01/0x00 in the high byte), so mask first. Matches
+    // parseEditState's `unitIsF: (unitWord & 0x01) !== 0`.
+    unit:              ((safe(dv.getUint16, 0x2e, true) ?? 0) & 0x01) === 0 ? 'C' : 'F',
     firmware:          ascii(slice(0x30, 0x34)),
     serialNumber:      safe(dv.getUint16, 0x34, true),
     // Alarm thresholds are stored as ASCII strings further down the block,
@@ -912,6 +915,7 @@ function getCurrentEditState() {
     unitIsF: document.getElementById('edit-unit').value === 'F',
     sampleIntervalSec: parseInt(document.getElementById('edit-interval').value, 10),
     delayedStartSec,
+    delayMode: delayMode === 'delayed' ? 'delayed' : 'immediate',
     alarmHi: {
       enabled: document.getElementById('edit-alarm-hi-on').checked,
       value: parseFloat(document.getElementById('edit-alarm-hi-value').value) || 0,
