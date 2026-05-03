@@ -5,7 +5,33 @@
 **Latest commit on the branch:** `75f46ab` (Download & Resume — no envelope traffic during the settling pause)
 **Hardware:** Lascar EL-USB-TC, VID `0x10C4`, PID `0x0002`, full-speed bulk EP 2 IN/OUT, 64-byte packet.
 
-## TL;DR
+## ✅ Resolution (2026-05-02 evening Jetson session)
+
+**Both `Read sensor → CSV` and `Download & Resume` now work end-to-end in the browser, no battery pull required.**
+
+The working sequence is **SV-stop → Download → SV-setup** (in that order). The cap 2 wire pattern this handoff was based on (Download → SV-stop → pause → SV-setup) does not work on this firmware — and almost certainly never did; cap 2's "worked, no battery pull" claim was likely misobserved. Cap 3 (which DID work, verified) starts from `0x21=0x02` post-battery-pull and only succeeds because the device was already in a non-logging state when Download ran.
+
+Discovered state-machine rules (validated via pyusb replay scripts, `scripts/replay_download_resume.py`):
+
+- Download from `0x21=0x03` (logging) leaves the device permanently stuck at `0x21=0x01`. No software path back — battery pull is the only recovery. Tested: SV-setup with various delays, SV-stop, USB port reset (`dev.reset()`), full cap 2 replay, polling for self-recovery. All fail.
+- SV-stop on a logging (`0x03`) device transitions it cleanly to `0x21=0x00` (a stable "stopped" state, not the transient one the original handoff doc described).
+- Download from `0x00` is safe — device stays at `0x00`.
+- SV-setup from `0x00` honors all fields (including sampleCount=0) and transitions through `0x01` (countdown) → `0x03` (logging) over the delayed-start window.
+
+Code changes on `feat/monitor-edit-update`:
+
+- `website/templates/pages/monitor.html`:
+  - `runWorkflow` `preDownload` branch reordered to SV-stop → Download → Load → SV-setup. Settling pause removed.
+  - `atomicReadOnly` (Read sensor button) now does Load → SV-stop → Download → CSV. Device left at `0x00` stopped; user does Setup & Start to resume.
+  - `sendCmd` no longer calls `clearEndpoints()` per command — EasyLog never issues `CLEAR_FEATURE(ENDPOINT_HALT)` between operations and the extra control transfers were noise. Halt clear remains at connect time only.
+  - Refactored `downloadSamples` into `downloadSamplesInner` + public wrapper so both flows share one busy lock.
+  - Removed `settlingPause` (no longer used).
+- `website/static/js/monitor-encoding.mjs`: comments on `applyWorkflowDeltas` updated to describe the actual state machine (cap 2 references removed).
+- Memory updated: `lascar_el_usb_tc_protocol.md` with the validated state machine, Download trap, working sequences.
+
+The pyusb replay script at `scripts/replay_download_resume.py` was the key diagnostic tool — running the same byte-on-the-wire sequence from libusb confirmed it wasn't a Chrome WebUSB peculiarity, then progressive simplification revealed the SV-stop-first ordering. Keep it for future protocol work.
+
+## TL;DR (original — preserved for context)
 
 Most of the monitor edit-and-update feature works. The one path still failing on real hardware is **Download & Resume**: it leaves the EL-USB-TC stuck at `0x21 = 0x01` (armed) instead of transitioning to `0x03` (logging) after the post-Download setup-and-start save. We've matched the byte-level wire pattern and timing of EasyLog's reference capture (`easylog-reference-2.pcapng`) as closely as we can see from the JS side, but it still fails. Remaining diagnostic options needed to break the deadlock:
 

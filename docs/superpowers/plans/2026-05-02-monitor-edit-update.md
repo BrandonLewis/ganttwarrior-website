@@ -1385,36 +1385,13 @@ git commit -m "feat(monitor): Setup & Start workflow — save edits, zero count,
 
 ---
 
-## Task 18: JS — Download & Resume workflow handler **(hardware test)**
+## Task 18: JS — Download & Resume workflow handler **(hardware test)** — ✅ DONE 2026-05-02
 
-**Files:**
-- Modify: `website/templates/pages/monitor.html`
+Resolved after extensive debugging. The cap 2 wire pattern (Download → SV-stop → pause → SV-setup) does NOT work on this firmware — Download from a logging (`0x21=0x03`) device leaves it stuck at `0x01` with no software path back. The working sequence is **SV-stop → Download → SV-setup**, verified end-to-end in the browser. See `docs/superpowers/handoff/2026-05-02-download-resume-debug.md` for the investigation trail and `~/.claude/projects/.../memory/lascar_el_usb_tc_protocol.md` for the validated state machine.
 
-- [ ] **Step 1: Wire the button using the same runner**
-
-Add to the event-handler section:
-
-```js
-document.getElementById('btn-download-resume').addEventListener('click', () =>
-  runWorkflow('Download & Resume', 'download-and-resume', { preDownload: true }));
-```
-
-- [ ] **Step 2: Hardware verification**
-
-On the Jetson:
-
-1. Reconnect → Load Config → Setup & Start (from Task 17) so the device has fresh logging state and at least a few samples accumulate.
-2. Wait ~30 seconds with the device-side at a reasonable temperature so a handful of samples are captured.
-3. Click `Download & Resume`.
-4. Verify: a CSV download fires, the warning-bar disappears (form re-baselined), the panel shows `sampleCount = 0` and a new start timestamp.
-5. Disconnect → reconnect → Load Config. Verify metadata intact.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add website/templates/pages/monitor.html
-git commit -m "feat(monitor): Download & Resume workflow — download samples, CSV export, restart logging"
-```
+- [x] **Step 1: Wire the button using the same runner**
+- [x] **Step 2: Hardware verification** — both `Read sensor → CSV` and `Download & Resume` confirmed working in the browser, no battery pull required.
+- [ ] **Step 3: Commit** — pending
 
 ---
 

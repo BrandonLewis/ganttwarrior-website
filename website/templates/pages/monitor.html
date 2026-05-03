@@ -383,9 +383,8 @@
     <div class="panel-head"><span>protocol</span><span class="meta">three commands per the sigrok wiki</span></div>
     <div class="panel-body">
       <div class="actions">
-        <button id="btn-read-sensor" class="primary" title="Initialize → load config → download samples → export CSV. Read-only — touches no flash. Sensor will need an EasyLog reset later before it can resume logging.">Read sensor → CSV</button>
+        <button id="btn-read-sensor" class="primary" title="Stop logging, download samples, export CSV. Stopping is required — Downloading from a logging device leaves the firmware stuck and forces a battery pull. After this runs, click Setup &amp; Start to begin a new logging session.">Read sensor → CSV</button>
         <button id="btn-load-config">Load Config &nbsp;<span style="color:var(--fg-3);font-weight:400">[00 FF FF]</span></button>
-        <button id="btn-download">Download Samples &nbsp;<span style="color:var(--fg-3);font-weight:400">[03 FF FF]</span></button>
         <button id="btn-export" class="ghost">Export CSV</button>
         <button id="btn-clear-log" class="ghost">Clear Log</button>
       </div>
@@ -559,7 +558,6 @@ function log(msg, kind = 'info') {
 function enableConnected(connected) {
   $('btn-disconnect').disabled = !connected;
   $('btn-load-config').disabled = !connected || busy;
-  $('btn-download').disabled = !connected || busy;
   $('btn-read-sensor').disabled = !connected || busy;
   $('btn-connect').disabled = connected;
 }
@@ -570,7 +568,6 @@ function setBusy(b) {
   // they'd steal each other's packets and produce scrambled responses.
   busy = b;
   $('btn-load-config').disabled = !device || busy;
-  $('btn-download').disabled = !device || busy;
   $('btn-read-sensor').disabled = !device || busy;
 }
 
@@ -683,7 +680,10 @@ async function withCommandEnvelope(label, inner) {
 }
 
 async function sendCmd(bytes) {
-  await clearEndpoints();
+  // No CLEAR_FEATURE(ENDPOINT_HALT) here — EasyLog never issues one between
+  // commands, and on this firmware the extra control transfers appear to
+  // discard session state (visible as Download & Resume leaving 0x21=0x01).
+  // Halts are cleared once at connect time only.
   log(`→ TX EP${hex2(EP_OUT)}  ${bytesHex(bytes)}`, 'cmd');
   const r = await device.transferOut(EP_OUT, bytes);
   if (r.status !== 'ok') throw new Error('transferOut: ' + r.status);
@@ -987,32 +987,18 @@ async function loadConfig() {
   }
 }
 
-async function downloadSamples() {
-  if (!device) return;
-  if (busy) { log('command already in flight — wait for it to finish or click Disconnect', 'warn'); return; }
-  if (!lastConfig) {
-    log('load config first — need sample count and interval to interpret data', 'warn');
-    return;
-  }
-  setBusy(true);
-  try {
-    setStatus('busy', 'downloading…');
-    log('── DOWNLOAD SAMPLES ──', 'cmd');
-    await withCommandEnvelope('Download Samples', async () => {
-      await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
-      const buf = await readFramed();
-      log(`samples received · ${buf.length} bytes`, 'ok');
-      lastSampleBytes = buf;
-      renderHexDump(buf);
-      decodeAndRender();
-    });
-    setStatus('on', `connected · ${lastConfig.sampleCount} samples`);
-  } catch (err) {
-    log(`downloadSamples: ${err.message}`, 'error');
-    setStatus('err', 'error');
-  } finally {
-    setBusy(false);
-  }
+async function downloadSamplesInner() {
+  setStatus('busy', 'downloading…');
+  log('── DOWNLOAD SAMPLES ──', 'cmd');
+  await withCommandEnvelope('Download Samples', async () => {
+    await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
+    const buf = await readFramed();
+    log(`samples received · ${buf.length} bytes`, 'ok');
+    lastSampleBytes = buf;
+    renderHexDump(buf);
+    decodeAndRender();
+  });
+  setStatus('on', `connected · ${lastConfig.sampleCount} samples`);
 }
 
 // ───────────────────────────────────────────────────────────
@@ -1243,32 +1229,35 @@ $('btn-connect').addEventListener('click', connect);
 $('btn-disconnect').addEventListener('click', disconnect);
 
 async function atomicReadOnly() {
-  // load → download → CSV. No write. Used by the "Read sensor → CSV" button.
+  // load → SV-stop → download → CSV. The SV-stop is required: Downloading
+  // from a logging (0x21=0x03) device leaves it stuck at 0x21=0x01 with
+  // no software path back (battery pull only). SV-stop transitions a
+  // logging device to 0x21=0x00 (stopped), from which Download is safe.
+  // The device is left stopped after this; user must click Setup & Start
+  // to resume logging.
   if (!device) { log('not connected', 'warn'); return; }
   if (busy) { log('command in flight, wait', 'warn'); return; }
-  log('── READ SENSOR (atomic) ──', 'cmd');
+  log('── READ SENSOR ──', 'cmd');
+  setBusy(true);
   try {
-    await loadConfig();
+    await loadConfigInner();
     if (!lastConfig) throw new Error('Load Config did not return data');
-    await downloadSamples();
-    if (!lastSampleBytes) throw new Error('Download Samples did not return data');
-    exportCsv();
-    log(`✓ sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · ${lastConfig.sampleCount} samples · CSV exported`, 'ok');
-  } catch (err) {
-    log(`atomic flow failed: ${err.message}`, 'error');
-  }
-}
 
-// Matches the firmware-settling pause observed in all three pcap captures
-// (cap 1: 15s, cap 2: 18.6s, cap 3: 22.5s) between the last preparation
-// op and the setup-and-start save. Without this gap the device refuses
-// to begin a new session post-download. The 20s default lands inside the
-// observed range; ticking output every 5s gives the user feedback.
-async function settlingPause(seconds) {
-  log(`  firmware settling — pausing ${seconds}s before setup save`, 'info');
-  for (let remaining = seconds; remaining > 0; remaining -= 5) {
-    if (remaining < seconds) log(`  settling… ${remaining}s remaining`, 'info');
-    await sleep(Math.min(5, remaining) * 1000);
+    log('  step 1: stop logging (0x21=0x00)', 'info');
+    const stopPayload = new Uint8Array(lastConfig.raw);
+    stopPayload[0x21] = 0x00;
+    await saveConfig(stopPayload);
+
+    log('  step 2: download samples', 'info');
+    await downloadSamplesInner();
+    if (!lastSampleBytes) throw new Error('Download Samples did not return data');
+
+    exportCsv();
+    log(`✓ sensor "${lastConfig.deviceName}" (sn ${lastConfig.serialNumber}) · ${lastConfig.sampleCount} samples · CSV exported · device stopped (Setup & Start to resume)`, 'ok');
+  } catch (err) {
+    log(`read flow failed: ${err.message}`, 'error');
+  } finally {
+    setBusy(false);
   }
 }
 
@@ -1280,39 +1269,25 @@ async function runWorkflow(label, workflow, opts = {}) {
   setBusy(true);
   try {
     if (opts.preDownload) {
-      // Cap 2 pattern (frames 371-443) — the closest reference to our case:
-      // device was logging (sf=01), then Download, then restart without
-      // battery pull. EasyLog's full sequence:
-      //   Download → Load → SV-stop (sf=00) → Load → ~18.6s gap → Load → SV-setup
-      // Both the SV-stop AND the pause appear necessary when the device
-      // was logging at start. Cap 3 (post-battery-pull, sf=02 idle) skips
-      // the SV-stop because nothing's actively recording to stop. We mirror
-      // cap 2 here since most users invoke Download & Resume on a sensor
-      // that's currently logging.
-      log('  step 1: download samples + CSV export', 'info');
-      await withCommandEnvelope('Download Samples', async () => {
-        await sendCmd(new Uint8Array([0x03, 0xFF, 0xFF]));
-        const buf = await readFramed();
-        lastSampleBytes = buf;
-        renderHexDump(buf);
-        decodeAndRender();
-      });
-      exportCsv();
-
-      log('  step 2: load config (observe post-download state)', 'info');
-      await loadConfigInner();
-
-      log('  step 3: stop-save (write current bytes back with 0x21=0x00)', 'info');
+      // Working sequence (verified via pyusb replay): SV-stop → Download
+      // → SV-setup. Order matters. Downloading from a logging device
+      // (0x21=0x03) leaves it stuck at 0x21=0x01 with no software path
+      // back. SV-stop first transitions 0x03 → 0x00 (clean stopped),
+      // making Download safe; the SV-setup that follows transitions
+      // 0x00 → 0x01 → 0x03 honoring sampleCount=0 and the new start
+      // timestamp. Earlier reference captures suggested a different
+      // order with a settling pause — that pattern does not work on
+      // this firmware.
+      log('  step 1: stop logging (0x21=0x00)', 'info');
       const stopPayload = new Uint8Array(lastConfig.raw);
       stopPayload[0x21] = 0x00;
       await saveConfig(stopPayload);
 
-      // Cap 2 has no envelope traffic between SV-stop ACK and the next
-      // Load — just silence. Don't insert a verify-Load here; another
-      // envelope mid-settle appears to interrupt the firmware's recovery.
-      await settlingPause(20);
+      log('  step 2: download samples + CSV export', 'info');
+      await downloadSamplesInner();
+      exportCsv();
 
-      log('  step 4: load config (final pre-save read)', 'info');
+      log('  step 3: load fresh baseline before setup save', 'info');
       await loadConfigInner();
     }
     const edits = getCurrentEditState();
@@ -1334,7 +1309,6 @@ async function runWorkflow(label, workflow, opts = {}) {
 
 document.getElementById('btn-read-sensor').addEventListener('click', atomicReadOnly);
 $('btn-load-config').addEventListener('click', loadConfig);
-$('btn-download').addEventListener('click', downloadSamples);
 $('btn-export').addEventListener('click', exportCsv);
 $('btn-clear-log').addEventListener('click', () => { logEl.innerHTML = ''; log('log cleared'); });
 $('decoder').addEventListener('change', decodeAndRender);

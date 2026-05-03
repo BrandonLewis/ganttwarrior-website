@@ -181,32 +181,23 @@ export function applyWorkflowDeltas(payload, workflow, now) {
   switch (workflow) {
     case 'setup-and-start':
     case 'download-and-resume': {
-      // EasyLog (per pcap reference 2 frame 443) writes startTimestamp =
-      // the TARGET wall-clock when logging will begin (= now +
-      // delayedStartSec). delayedStartSec was already spliced into the
-      // payload by buildEditedConfig — read it back here.
+      // startTimestamp is the TARGET wall-clock when logging will begin
+      // (= now + delayedStartSec). delayedStartSec was already spliced
+      // into the payload by buildEditedConfig — read it back here.
       const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
       const delaySec = dv.getUint32(0x18, true);
       const target = new Date(now.getTime() + delaySec * 1000);
       payload.set(encodeStartTimestamp(target), 0x12);
       payload[0x1e] = 0; payload[0x1f] = 0;
-      // Hard-set 0x21 to 0x01 — match EasyLog's setup save in references
-      // 2 frame 443 and 3 frame 422. The previous setBit(_, 0, true)
-      // approach left bit 1 set on a post-reset baseline (0x02), which
-      // appears to block the firmware from honoring a new session.
+      // 0x21 = 0x01 (armed). Firmware transitions 0x01 → 0x03 (logging)
+      // when delayedStartSec elapses. alarmFlags bits 2-7 are preserved.
       payload[0x21] = 0x01;
-      // alarmFlags: do NOT mask bits 2-7. Reference 2 frame 443 (the
-      // capture that successfully downloads + restarts without a battery
-      // pull) preserved alarmFlags=0x0F across the setup save. Capture 3
-      // cleared bits 2-3 but its outcome was unclear; capture 2 is our
-      // source of truth for "download + restart works".
       break;
     }
     case 'stop-logging':
-      // EasyLog's stop save (pcap references 1 and 2) writes 0x21 = 0x00
-      // — clears every bit, not just bit 0. The firmware appears to
-      // reassert state on the next Load regardless, so this is a no-op
-      // in practice; we match EasyLog's wire format anyway.
+      // 0x21 = 0x00 transitions a logging device (0x03) to stopped (0x00).
+      // From 0x00, Download is safe and a subsequent setup-and-start save
+      // is honored. From 0x01 (armed/stuck), this write is ignored.
       payload[0x21] = 0x00;
       break;
     default:
